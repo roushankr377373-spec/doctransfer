@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react';
+import Logo from './components/Logo';
 import {
   Shield,
   FileText,
@@ -82,10 +83,7 @@ const LandingPage: React.FC = () => {
   return (
     <div className="landing-page">
       <header className="header">
-        <div className="logo">
-          <FileText size={28} />
-          <span>DocTransfer</span>
-        </div>
+        <Logo size={32} />
         <nav>
           <div className="nav-links">
             <a href="#features">Features</a>
@@ -432,9 +430,8 @@ const LandingPage: React.FC = () => {
       <footer className="footer">
         <div className="footer-content">
           <div className="footer-col">
-            <div className="logo" style={{ marginBottom: '1rem' }}>
-              <FileText size={24} />
-              <span>DocTransfer</span>
+            <div style={{ marginBottom: '1rem' }}>
+              <Logo size={28} />
             </div>
             <p style={{ color: '#6b7280', fontSize: '0.9rem' }}>
               Secure document sharing and analytics for modern teams.

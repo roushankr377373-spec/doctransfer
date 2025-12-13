@@ -21,7 +21,6 @@ import { supabase } from './lib/supabase';
 import { encryptFile } from './lib/crypto';
 import { hashPassword } from './lib/security';
 import GoogleDriveTab from './components/GoogleDriveTab';
-import BrandingSettings from './components/BrandingSettings';
 import AnalyticsDashboard from './components/analytics/AnalyticsDashboard';
 import DashboardAnimation from './components/DashboardAnimation';
 import SignerManagement, { type Signer } from './components/SignerManagement';
@@ -48,7 +47,7 @@ interface Document {
 const DataRoom: React.FC = () => {
     const [documents, setDocuments] = useState<Document[]>([]);
     const [isDragging, setIsDragging] = useState(false);
-    const [activeTab, setActiveTab] = useState<'upload' | 'google-drive' | 'documents' | 'analytics' | 'settings' | 'branding'>('upload');
+    const [activeTab, setActiveTab] = useState<'upload' | 'google-drive' | 'documents' | 'analytics'>('upload');
     const [selectedDocumentId, setSelectedDocumentId] = useState<string | undefined>(undefined);
 
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -379,23 +378,13 @@ const DataRoom: React.FC = () => {
                         <button onClick={() => setActiveTab('analytics')} style={{ padding: '0.625rem 1.5rem', background: activeTab === 'analytics' ? '#8b5cf6' : 'transparent', color: activeTab === 'analytics' ? 'white' : '#6b7280', border: 'none', borderRadius: '8px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', transition: 'all 0.2s' }}>
                             <BarChart2 size={16} /> Analytics
                         </button>
-                        <button onClick={() => setActiveTab('settings')} style={{ padding: '0.625rem 1.5rem', background: activeTab === 'settings' ? '#8b5cf6' : 'transparent', color: activeTab === 'settings' ? 'white' : '#6b7280', border: 'none', borderRadius: '8px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', transition: 'all 0.2s' }}>
-                            <Shield size={16} /> Share Settings
-                        </button>
-                        <button onClick={() => setActiveTab('branding')} style={{ padding: '0.625rem 1.5rem', background: activeTab === 'branding' ? '#8b5cf6' : 'transparent', color: activeTab === 'branding' ? 'white' : '#6b7280', border: 'none', borderRadius: '8px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', transition: 'all 0.2s' }}>
-                            <ImageIcon size={16} /> Branding
-                        </button>
                     </div>
                 </div>
             </header>
 
             {/* Main Content */}
             <main style={{ maxWidth: '1400px', margin: '0 auto', padding: '2rem' }}>
-                {activeTab === 'branding' ? (
-                    <div className="animate-fade-in">
-                        <BrandingSettings userId="guest" />
-                    </div>
-                ) : activeTab === 'google-drive' ? (
+                {activeTab === 'google-drive' ? (
                     <GoogleDriveTab onDocumentUploaded={fetchDocuments} />
                 ) : activeTab === 'analytics' ? (
                     <AnalyticsDashboard documentId={selectedDocumentId} />
