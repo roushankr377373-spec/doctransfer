@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { decryptFile } from './lib/crypto';
 import { comparePassword, rateLimiter } from './lib/security';
-import { FileText, Download, Shield, AlertCircle, Lock as LockIcon, Mail, Flame } from 'lucide-react';
+import { FileText, Download, AlertCircle, Lock as LockIcon, Package, ArrowRight, ExternalLink, Flame, ShieldCheck } from 'lucide-react';
 import { logDocumentView, logDocumentDownload, logPasswordVerification, logEmailVerification } from './lib/auditLogger';
 import WatermarkOverlay from './components/WatermarkOverlay';
 import BiometricGate from './components/BiometricGate';
@@ -44,9 +45,25 @@ interface DocumentData {
     max_views?: number;
     view_count?: number;
     burn_after_reading?: boolean;
+    share_link?: string; // Added for bundle listing
+    user_id?: string;
+}
+
+interface BundleData {
+    id: string;
+    name: string;
+    share_link: string;
+    created_at: string;
+    password?: string;
+    expires_at?: string;
+    require_biometric: boolean;
+    require_email_verification: boolean;
+    allowed_email?: string;
+    user_id?: string;
 }
 
 const ViewDocument: React.FC = () => {
+    const { t } = useTranslation();
     const { shareLink } = useParams<{ shareLink: string }>();
     const [document, setDocument] = useState<DocumentData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -54,6 +71,11 @@ const ViewDocument: React.FC = () => {
     const [passwordInput, setPasswordInput] = useState('');
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [downloading, setDownloading] = useState(false);
+
+    // Bundle State
+    const [isBundle, setIsBundle] = useState(false);
+    const [bundleData, setBundleData] = useState<BundleData | null>(null);
+    const [bundleDocs, setBundleDocs] = useState<DocumentData[]>([]);
 
     // Email Verification State
     const [email, setEmail] = useState('');
@@ -96,93 +118,139 @@ const ViewDocument: React.FC = () => {
 
     const fetchDocument = async () => {
         try {
-            const { data, error } = await supabase
+            // 1. Try to find Single Document
+            const { data: docData } = await supabase
                 .from('documents')
                 .select('*')
                 .eq('share_link', shareLink)
-                .single();
+                .maybeSingle();
 
-            if (error) throw error;
-
-            setDocument(data);
-
-            // Fetch branding settings
-            if (data.user_id) {
-                const { data: brandingData } = await supabase
-                    .from('branding_settings')
-                    .select('logo_url, brand_color, site_url')
-                    .eq('user_id', data.user_id)
-                    .single();
-                if (brandingData) setBranding(brandingData);
-            }
-
-            // Start basic view tracking
-            trackView(data.id);
-
-            // Increment Secure View Count
-            supabase.rpc('increment_view_count', { doc_id: data.id }).then(({ error }) => {
-                if (error) console.error('Failed to increment view count:', error);
-            });
-
-            // Log to audit system
-            logDocumentView(data.id, {
-                metadata: {
-                    viewer_agent: navigator.userAgent
-                }
-            });
-
-            // SECURITY: Check Malware Scan Status
-            if (data.scan_status === 'infected') {
-                setError('This file has been flagged as malicious and cannot be accessed.');
-                return;
-            }
-            if (data.scan_status === 'pending') {
-                console.warn('File is currently being scanned.');
-                // Optional: You could block 'pending' too, but usually we allow it until proven guilty
-                // setError('File scanning in progress. Please try again in a few moments.'); 
-                // return;
-            }
-
-            // Check Max Views (Burn After Reading Fail-safe)
-            if (data.max_views && data.view_count >= data.max_views) {
-                setError('This document has reached its view limit and is no longer accessible.');
+            if (docData) {
+                setDocument(docData);
+                handleDocLoaded(docData);
                 return;
             }
 
-            // Check for expiration
+            // 2. If not found, try to find Bundle
+            const { data: bundle } = await supabase
+                .from('document_bundles')
+                .select('*')
+                .eq('share_link', shareLink)
+                .maybeSingle();
 
-            // Check for expiration
-            if (data.expires_at) {
-                const expirationDate = new Date(data.expires_at);
-                const now = new Date();
-                // Set to end of day for expiration date
-                expirationDate.setHours(23, 59, 59, 999);
+            if (bundle) {
+                setIsBundle(true);
+                setBundleData(bundle);
 
-                if (now > expirationDate) {
-                    setError('This link has expired.');
-                    return;
-                }
+                // Fetch docs in bundle
+                const { data: docs } = await supabase
+                    .from('documents')
+                    .select('*')
+                    .eq('bundle_id', bundle.id)
+                    .order('created_at', { ascending: true });
+
+                if (docs) setBundleDocs(docs);
+
+                handleBundleLoaded(bundle);
+                return;
             }
 
-            // Auto-authenticate logic
-            // If NO password AND NO email verification -> Authenticated
-            if ((!data.password || data.password === '') && !data.email_verification) {
-                setIsAuthenticated(true);
-            }
-
-            // If ONLY password -> Authenticated = false (handled by UI)
-            // If ONLY email -> Authenticated = true (but blocked by email UI)
-            // If BOTH -> Authenticated = false (password first), then blocked by email UI
-
-            if (!data.password || data.password === '') {
-                setIsAuthenticated(true);
-            }
+            throw new Error('Not found');
 
         } catch (err: any) {
-            console.error('Error fetching document:', err);
-            setError('Document not found or link expired.');
+            console.error('Error fetching resource:', err);
+            setError('Link is invalid or has expired.');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDocLoaded = (data: DocumentData) => {
+        // Fetch branding settings
+        if (data.user_id) {
+            supabase
+                .from('branding_settings')
+                .select('logo_url, brand_color, site_url')
+                .eq('user_id', data.user_id)
+                .single()
+                .then(({ data: brandingData }) => {
+                    if (brandingData) setBranding(brandingData);
+                });
+        }
+
+        // Start basic view tracking
+        trackView(data.id);
+
+        // Increment Secure View Count
+        supabase.rpc('increment_view_count', { doc_id: data.id }).then(({ error }) => {
+            if (error) console.error('Failed to increment view count:', error);
+        });
+
+        // Log to audit system
+        logDocumentView(data.id, {
+            metadata: {
+                viewer_agent: navigator.userAgent
+            }
+        });
+
+        // SECURITY: Check Malware Scan Status
+        if (data.scan_status === 'infected') {
+            setError('This file has been flagged as malicious and cannot be accessed.');
+            return;
+        }
+
+        // Check Max Views (Burn After Reading Fail-safe)
+        if (data.max_views && (data.view_count || 0) >= data.max_views) {
+            setError('This document has reached its view limit and is no longer accessible.');
+            return;
+        }
+
+        // Check for expiration
+        if (data.expires_at) {
+            const expirationDate = new Date(data.expires_at);
+            const now = new Date();
+            expirationDate.setHours(23, 59, 59, 999);
+
+            if (now > expirationDate) {
+                setError('This link has expired.');
+                return;
+            }
+        }
+
+        // Auto-authenticate logic
+        if ((!data.password || data.password === '') && !data.email_verification) {
+            setIsAuthenticated(true);
+        }
+    };
+
+    const handleBundleLoaded = (data: BundleData) => {
+        // Fetch branding
+        if (data.user_id) {
+            supabase
+                .from('branding_settings')
+                .select('logo_url, brand_color, site_url')
+                .eq('user_id', data.user_id)
+                .single()
+                .then(({ data: brandingData }) => {
+                    if (brandingData) setBranding(brandingData);
+                });
+        }
+
+        // Check Expiration
+        if (data.expires_at) {
+            const expirationDate = new Date(data.expires_at);
+            const now = new Date();
+            expirationDate.setHours(23, 59, 59, 999);
+
+            if (now > expirationDate) {
+                setError('This bundle link has expired.');
+                return;
+            }
+        }
+
+        // Auto-authenticate logic
+        if ((!data.password || data.password === '') && !data.require_email_verification) {
+            setIsAuthenticated(true);
         }
     };
 
@@ -261,9 +329,11 @@ const ViewDocument: React.FC = () => {
 
     const handlePasswordSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (document?.password && await comparePassword(passwordInput, document.password)) {
+        const target = isBundle ? bundleData : document;
+
+        if (target?.password && await comparePassword(passwordInput, target.password)) {
             setIsAuthenticated(true);
-            await logPasswordVerification(document.id, true);
+            if (document) await logPasswordVerification(document.id, true); // Log for single doc
         } else {
             if (document) await logPasswordVerification(document.id, false);
             alert('Incorrect password');
@@ -281,8 +351,10 @@ const ViewDocument: React.FC = () => {
             return;
         }
 
+        const target = isBundle ? bundleData : document;
+
         // Check if specific email is required
-        if (document?.allowed_email && document.allowed_email !== email) {
+        if (target?.allowed_email && target.allowed_email !== email) {
             alert('Access denied. This document is not shared with this email address.');
             return;
         }
@@ -532,244 +604,439 @@ const ViewDocument: React.FC = () => {
         );
     }
 
-    if (error || !document) {
+    if (error) {
         return (
-            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb' }}>
-                <div style={{ textAlign: 'center', padding: '2rem', background: 'white', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                    <AlertCircle size={48} color="#ef4444" style={{ margin: '0 auto 1rem' }} />
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1f2937', marginBottom: '0.5rem' }}>Link Invalid</h2>
-                    <p style={{ color: '#6b7280' }}>{error || "This link is invalid or has expired."}</p>
+            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb', padding: '1rem' }}>
+                <div style={{ background: 'white', padding: '2rem', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', maxWidth: '400px', width: '100%', textAlign: 'center' }}>
+                    <div style={{ width: '64px', height: '64px', background: '#fee2e2', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
+                        <AlertCircle size={32} color="#dc2626" />
+                    </div>
+                    <h1 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#111827', marginBottom: '0.5rem' }}>{t('view.accessDenied')}</h1>
+                    <p style={{ color: '#6b7280' }}>{error}</p>
                 </div>
             </div>
         );
     }
 
-    // Determine what to show
-    const showPasswordScreen = document.password && !isAuthenticated;
-    const showEmailScreen = document.email_verification && !isEmailVerified && !showPasswordScreen;
-    const showBiometricScreen = document.require_biometric && !isBiometricVerified && !showPasswordScreen && !showEmailScreen;
-    const showSnapshotScreen = document.require_snapshot && !isSnapshotVerified && !showPasswordScreen && !showEmailScreen && !showBiometricScreen;
-    const showContent = !showPasswordScreen && !showEmailScreen && !showBiometricScreen && !showSnapshotScreen;
+    // Determine targets
+    const targetData = isBundle ? bundleData : document;
 
-    return (
-        <div
-            style={{
-                minHeight: '100vh',
-                background: '#f3f4f6',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '1rem',
-                userSelect: document.screenshot_protection ? 'none' : 'auto',
-                WebkitUserSelect: document.screenshot_protection ? 'none' : 'auto'
-            }}
-            onContextMenu={(e) => {
-                if (document.screenshot_protection) {
-                    e.preventDefault();
-                }
-            }}
-        >
-            {document.screenshot_protection && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    pointerEvents: 'none',
-                    zIndex: 9999,
-                    backgroundImage: 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' version=\'1.1\' height=\'100px\' width=\'100px\'><text transform=\'translate(20, 100) rotate(-45)\' fill=\'rgba(0,0,0,0.05)\' font-size=\'20\'>Protected View</text></svg>")'
-                }} />
-            )}
+    // Auth Check (Password or Email)
+    const requiresEmail = isBundle
+        ? bundleData?.require_email_verification
+        : document?.email_verification;
 
-            {document.watermark_config && (
-                <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 50 }}>
-                    <WatermarkOverlay
-                        config={document.watermark_config}
-                        viewerInfo={{
-                            email: isEmailVerified ? email : undefined,
-                            ip: '127.0.0.1', // Ideally fetched from edge
-                            date: new Date().toLocaleString()
-                        }}
-                    />
-                </div>
-            )}
+    if ((targetData?.password && !isAuthenticated) || (requiresEmail && !isEmailVerified)) {
+        return (
+            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb', padding: '1rem' }}>
+                <div style={{ background: 'white', padding: '2.5rem', borderRadius: '24px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', maxWidth: '440px', width: '100%' }}>
 
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', maxWidth: '480px' }}>
-                {branding?.logo_url && (
-                    <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
-                        {branding.site_url ? (
-                            <a href={branding.site_url} target="_blank" rel="noopener noreferrer">
-                                <img src={branding.logo_url} alt="Company Logo" style={{ height: '60px', objectFit: 'contain' }} />
-                            </a>
-                        ) : (
-                            <img src={branding.logo_url} alt="Company Logo" style={{ height: '60px', objectFit: 'contain' }} />
-                        )}
-                    </div>
-                )}
-
-                <div style={{ width: '100%', background: 'white', borderRadius: '24px', padding: '2.5rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' }}>
+                    {/* Branding Logo */}
+                    {branding?.logo_url && (
+                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2rem' }}>
+                            <img src={branding.logo_url} alt="Logo" style={{ height: '40px', objectFit: 'contain' }} />
+                        </div>
+                    )}
 
                     <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                        <div style={{
-                            width: '80px',
-                            height: '80px',
-                            background: branding?.brand_color ? `${branding.brand_color}20` : '#e0e7ff',
-                            borderRadius: '20px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            margin: '0 auto 1.5rem',
-                            color: branding?.brand_color || '#4f46e5'
-                        }}>
-                            <FileText size={40} />
+                        <div style={{ width: '64px', height: '64px', background: '#eff6ff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
+                            <LockIcon size={32} color="#3b82f6" />
                         </div>
-                        <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: '#111827', marginBottom: '0.5rem' }}>{document.name}</h1>
-                        <p style={{ color: '#6b7280', fontSize: '0.95rem' }}>
-                            {document.storage_type === 'google_drive' ? (
-                                <>{document.file_type}</>
-                            ) : (
-                                <>{(document.file_size / 1024 / 1024).toFixed(2)} MB • {document.file_type.split('/')[1]?.toUpperCase() || 'FILE'}</>
-                            )}
+                        <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#111827', marginBottom: '0.5rem' }}>
+                            {requiresEmail && !isEmailVerified ? t('view.emailTitle') : t('view.passwordTitle')}
+                        </h1>
+                        <p style={{ color: '#6b7280' }}>
+                            {isBundle
+                                ? "This document bundle is secured."
+                                : t('view.passwordDesc')
+                            }
                         </p>
                     </div>
 
-                    {showPasswordScreen && (
-                        <form onSubmit={handlePasswordSubmit}>
-                            <div style={{ marginBottom: '1.5rem' }}>
-                                <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-                                    This file is password protected
-                                </label>
-                                <div style={{ position: 'relative' }}>
-                                    <LockIcon style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} size={18} />
-                                    <input
-                                        type="password"
-                                        value={passwordInput}
-                                        onChange={(e) => setPasswordInput(e.target.value)}
-                                        placeholder="Enter password"
-                                        style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', border: '1px solid #d1d5db', borderRadius: '12px', outline: 'none', fontSize: '1rem' }}
-                                        autoFocus
-                                    />
-                                </div>
-                            </div>
-                            <button type="submit" className="btn-primary" style={{ width: '100%', padding: '0.875rem', background: branding?.brand_color || '#4f46e5', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '600', cursor: 'pointer', fontSize: '1rem' }}>
-                                Unlock File
-                            </button>
-                        </form>
-                    )}
-
-                    {showEmailScreen && (
-                        <div>
+                    {/* Email Verification UI */}
+                    {requiresEmail && !isEmailVerified ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             {!showCodeInput ? (
-                                <form onSubmit={handleSendCode}>
-                                    <div style={{ marginBottom: '1.5rem' }}>
-                                        <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-                                            Email Verification Required
-                                        </label>
-                                        <div style={{ position: 'relative' }}>
-                                            <Mail style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} size={18} />
-                                            <input
-                                                type="email"
-                                                value={email}
-                                                onChange={(e) => setEmail(e.target.value)}
-                                                placeholder="Enter your email"
-                                                required
-                                                style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', border: '1px solid #d1d5db', borderRadius: '12px', outline: 'none', fontSize: '1rem' }}
-                                            />
-                                        </div>
-                                    </div>
-                                    <button type="submit" className="btn-primary" style={{ width: '100%', padding: '0.875rem', background: branding?.brand_color || '#4f46e5', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '600', cursor: 'pointer', fontSize: '1rem' }}>
-                                        Send Verification Code
+                                <form onSubmit={handleSendCode} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <input
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        placeholder={t('view.emailPlaceholder')}
+                                        style={{ width: '100%', padding: '0.875rem', borderRadius: '12px', border: '1px solid #e5e7eb', fontSize: '1rem', outline: 'none' }}
+                                        required
+                                    />
+                                    <button type="submit" style={{ width: '100%', padding: '0.875rem', background: branding?.brand_color || '#2563eb', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '600', fontSize: '1rem', cursor: 'pointer' }}>
+                                        {t('view.sendCode')}
                                     </button>
                                 </form>
                             ) : (
-                                <form onSubmit={handleVerifyCode}>
-                                    <div style={{ marginBottom: '1.5rem' }}>
-                                        <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-                                            Enter Verification Code
-                                        </label>
-                                        <p style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '1rem' }}>
-                                            Code sent to {email}
-                                        </p>
-                                        <input
-                                            type="text"
-                                            value={verificationCode}
-                                            onChange={(e) => setVerificationCode(e.target.value)}
-                                            placeholder="000000"
-                                            maxLength={6}
-                                            style={{ width: '100%', padding: '0.75rem 1rem', border: '1px solid #d1d5db', borderRadius: '12px', outline: 'none', fontSize: '1.25rem', letterSpacing: '0.25rem', textAlign: 'center' }}
-                                        />
-                                    </div>
-                                    <button type="submit" className="btn-primary" style={{ width: '100%', padding: '0.875rem', background: branding?.brand_color || '#4f46e5', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '600', cursor: 'pointer', fontSize: '1rem' }}>
-                                        Verify & Access
+                                <form onSubmit={handleVerifyCode} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <input
+                                        type="text"
+                                        value={verificationCode}
+                                        onChange={(e) => setVerificationCode(e.target.value)}
+                                        placeholder="Enter 6-digit code"
+                                        style={{ width: '100%', padding: '0.875rem', borderRadius: '12px', border: '1px solid #e5e7eb', fontSize: '1rem', outline: 'none', textAlign: 'center', letterSpacing: '0.25rem' }}
+                                        required
+                                    />
+                                    <button type="submit" style={{ width: '100%', padding: '0.875rem', background: '#10b981', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '600', fontSize: '1rem', cursor: 'pointer' }}>
+                                        {t('view.verify')}
                                     </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowCodeInput(false)}
-                                        style={{ width: '100%', marginTop: '1rem', background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: '0.9rem' }}
-                                    >
-                                        Change Email
+                                    <button type="button" onClick={() => setShowCodeInput(false)} style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: '0.875rem' }}>
+                                        {t('view.changeEmail')}
                                     </button>
                                 </form>
                             )}
                         </div>
+                    ) : (
+                        /* Password UI */
+                        <form onSubmit={handlePasswordSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <input
+                                type="password"
+                                value={passwordInput}
+                                onChange={(e) => setPasswordInput(e.target.value)}
+                                placeholder={t('view.passwordPlaceholder')}
+                                style={{ width: '100%', padding: '0.875rem', borderRadius: '12px', border: '1px solid #e5e7eb', fontSize: '1rem', outline: 'none' }}
+                                required
+                            />
+                            <button type="submit" style={{ width: '100%', padding: '0.875rem', background: branding?.brand_color || '#2563eb', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '600', fontSize: '1rem', cursor: 'pointer' }}>
+                                {t('view.unlock')}
+                            </button>
+                        </form>
                     )}
+                </div>
+            </div>
+        );
+    }
 
-                    {showBiometricScreen && (
-                        <BiometricGate
-                            documentName={document.name}
-                            credentialId={document.biometric_credential_id}
-                            onVerified={handleBiometricSuccess}
-                        />
-                    )}
-
-                    {showSnapshotScreen && (
-                        <WebcamGate
-                            documentName={document.name}
-                            onVerified={handleSnapshotSuccess}
-                        />
-                    )}
-
-                    {showContent && (
-                        <div className="animate-fade-in">
-                            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '1rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                <Shield size={20} color="#16a34a" />
-                                <span style={{ color: '#15803d', fontSize: '0.9rem', fontWeight: '500' }}>File is secure and ready to download</span>
+    // --- BUNDLE VIEW ---
+    if (isBundle && bundleData) {
+        return (
+            <div style={{ minHeight: '100vh', background: '#f3f4f6', padding: '2rem' }}>
+                <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+                    {/* Bundle Header */}
+                    <div style={{ background: 'white', padding: '2rem', borderRadius: '16px', marginBottom: '1.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                        {branding?.logo_url && (
+                            <img src={branding.logo_url} alt="Logo" style={{ height: '32px', marginBottom: '1.5rem' }} />
+                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
+                            <div style={{ background: '#ecfdf5', padding: '0.75rem', borderRadius: '10px' }}>
+                                <Package size={32} color="#059669" />
                             </div>
+                            <div>
+                                <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#111827' }}>{bundleData.name}</h1>
+                                <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                                    {bundleDocs.length} files • Created {new Date(bundleData.created_at).toLocaleDateString()}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
 
-                            {document.allow_download ? (
-                                <button
-                                    onClick={handleDownload}
-                                    disabled={downloading}
-                                    className="btn-primary"
-                                    style={{ width: '100%', padding: '1rem', background: branding?.brand_color || '#4f46e5', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '600', cursor: 'pointer', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', transition: 'all 0.2s' }}
-                                >
-                                    {downloading ? 'Opening...' : (
-                                        <>
-                                            <Download size={24} />
-                                            {document.storage_type === 'google_drive' ? 'Open in Google Drive' : 'Download File'}
-                                        </>
-                                    )}
-                                </button>
+                    {/* Files List */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        {bundleDocs.map((doc) => (
+                            <div key={doc.id} style={{
+                                background: 'white',
+                                padding: '1.25rem',
+                                borderRadius: '12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                transition: 'transform 0.2s, box-shadow 0.2s',
+                                cursor: 'pointer',
+                                border: '1px solid transparent'
+                            }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(-2px)';
+                                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.1)';
+                                    e.currentTarget.style.borderColor = '#e5e7eb';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.transform = 'none';
+                                    e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
+                                    e.currentTarget.style.borderColor = 'transparent';
+                                }}
+                                onClick={() => {
+                                    // Navigate to individual document view
+                                    window.open(`${window.location.origin}/view/${doc.share_link}`, '_blank');
+                                }}
+                            >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                    <div style={{
+                                        width: '48px',
+                                        height: '48px',
+                                        background: '#f3f4f6',
+                                        borderRadius: '8px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}>
+                                        <FileText size={24} color="#6b7280" />
+                                    </div>
+                                    <div>
+                                        <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#1f2937', marginBottom: '0.25rem' }}>{doc.name}</h3>
+                                        <p style={{ fontSize: '0.75rem', color: '#9ca3af' }}>{(doc.file_size / 1024).toFixed(2)} KB</p>
+                                    </div>
+                                </div>
+                                <div style={{
+                                    width: '40px',
+                                    height: '40px',
+                                    borderRadius: '50%',
+                                    background: '#f9fafb',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <ExternalLink size={20} color="#6b7280" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div style={{ marginTop: '2rem', textAlign: 'center', color: '#9ca3af', fontSize: '0.8rem' }}>
+                        Powered by DocTransfer
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // --- SINGLE DOC VIEW (Existing + Interface) ---
+    // At this point, we assume it's NOT a bundle, so 'document' must be present 
+    // unless loading failed (handled above) or not initialized.
+    if (!document) return null;
+
+    return (
+        <div style={{
+            minHeight: '100vh',
+            background: '#f3f4f6',
+            display: 'flex',
+            flexDirection: 'column'
+        }}>
+            {/* Watermark Overlay */}
+            {document.watermark_config && (
+                <WatermarkOverlay
+                    config={document.watermark_config}
+                    viewerInfo={{
+                        email: isEmailVerified ? email : undefined,
+                        ip: '127.0.0.1',
+                        date: new Date().toLocaleString()
+                    }}
+                />
+            )}
+
+            {/* Content Container */}
+            <div style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '2rem'
+            }}>
+                <div style={{
+                    background: 'white',
+                    borderRadius: '24px',
+                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+                    width: '100%',
+                    maxWidth: '1000px',
+                    overflow: 'hidden',
+                    position: 'relative'
+                }}>
+
+                    {/* Header */}
+                    <div style={{
+                        padding: '1.5rem 2rem',
+                        borderBottom: '1px solid #f3f4f6',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        background: 'white'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            {branding?.logo_url ? (
+                                <img src={branding.logo_url} alt="Logo" style={{ height: '32px' }} />
                             ) : (
-                                <div style={{ textAlign: 'center', padding: '1rem', background: '#fef2f2', borderRadius: '12px', color: '#dc2626' }}>
-                                    <AlertCircle size={24} style={{ marginBottom: '0.5rem' }} />
-                                    <p>Downloads are disabled for this file.</p>
+                                <div style={{
+                                    width: '40px',
+                                    height: '40px',
+                                    background: branding?.brand_color || '#4f46e5',
+                                    borderRadius: '10px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <FileText size={20} color="white" />
                                 </div>
                             )}
+                            <div>
+                                <h2 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#111827' }}>
+                                    {document.name}
+                                </h2>
+                                <p style={{ fontSize: '0.8rem', color: '#6b7280' }}>
+                                    {(document.file_size / 1024 / 1024).toFixed(2)} MB • {document.file_type}
+                                </p>
+                            </div>
+                        </div>
+
+                        {document.allow_download && (
+                            <button
+                                onClick={handleDownload}
+                                disabled={downloading}
+                                style={{
+                                    padding: '0.75rem 1.5rem',
+                                    background: downloading ? '#9ca3af' : (branding?.brand_color || '#4f46e5'),
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '10px',
+                                    fontWeight: '600',
+                                    fontSize: '0.9rem',
+                                    cursor: downloading ? 'not-allowed' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem',
+                                    transition: 'all 0.2s',
+                                    boxShadow: '0 4px 6px -1px rgba(79, 70, 229, 0.2)'
+                                }}
+                            >
+                                {downloading ? (
+                                    'Processing...'
+                                ) : (
+                                    <>
+                                        <Download size={18} />
+                                        Download File
+                                    </>
+                                )}
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Security Gates (Biometric / Snapshot) */}
+                    {(document.require_biometric && !isBiometricVerified) || (document.require_snapshot && !document.require_biometric && !isSnapshotVerified) ? (
+                        <div style={{ padding: '4rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f9fafb', minHeight: '400px' }}>
+
+                            {/* Biometric Gate */}
+                            {document.require_biometric && !isBiometricVerified && (
+                                <BiometricGate
+                                    documentName={document.name}
+                                    credentialId={document.biometric_credential_id}
+                                    onVerified={handleBiometricSuccess}
+                                />
+                            )}
+
+                            {/* Snapshot Gate (Only if biometric passed or not required) */}
+                            {(!document.require_biometric || isBiometricVerified) && document.require_snapshot && !isSnapshotVerified && (
+                                <WebcamGate
+                                    documentName={document.name}
+                                    onVerified={handleSnapshotSuccess}
+                                />
+                            )}
+
+                        </div>
+                    ) : (
+                        /* Document Preview Area */
+                        /* Decorative Floating Animation */
+                        <div style={{
+                            background: '#f8fafc',
+                            padding: '4rem 2rem',
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            minHeight: '400px',
+                            position: 'relative',
+                            overflow: 'hidden'
+                        }}>
+                            <style>
+                                {`
+                                    @keyframes float {
+                                        0% { transform: translateY(0px) rotate(0deg); }
+                                        50% { transform: translateY(-20px) rotate(2deg); }
+                                        100% { transform: translateY(0px) rotate(0deg); }
+                                    }
+                                    @keyframes pulse-glow {
+                                        0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.2); }
+                                        70% { box-shadow: 0 0 0 20px rgba(99, 102, 241, 0); }
+                                        100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+                                    }
+                                `}
+                            </style>
+
+                            <div style={{
+                                position: 'relative',
+                                animation: 'float 6s ease-in-out infinite'
+                            }}>
+                                {/* Glow Effect */}
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '50%',
+                                    left: '50%',
+                                    transform: 'translate(-50%, -50%)',
+                                    width: '120px',
+                                    height: '120px',
+                                    background: 'rgba(99, 102, 241, 0.15)',
+                                    borderRadius: '50%',
+                                    filter: 'blur(20px)',
+                                    animation: 'pulse-glow 3s infinite'
+                                }} />
+
+                                {/* Icon Container */}
+                                <div style={{
+                                    width: '100px',
+                                    height: '100px',
+                                    background: 'white',
+                                    borderRadius: '24px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                                    position: 'relative',
+                                    zIndex: 10,
+                                    border: '1px solid #e0e7ff'
+                                }}>
+                                    {document.is_encrypted || document.is_vault_file ? (
+                                        <LockIcon size={48} color="#4f46e5" />
+                                    ) : (
+                                        <FileText size={48} color="#4f46e5" />
+                                    )}
+                                </div>
+
+                                {/* Floating Elements */}
+                                <div style={{
+                                    position: 'absolute',
+                                    top: -10,
+                                    right: -10,
+                                    background: '#ecfdf5',
+                                    borderRadius: '50%',
+                                    padding: '8px',
+                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                                    animation: 'float 4s ease-in-out infinite reverse',
+                                    zIndex: 11
+                                }}>
+                                    <ShieldCheck size={16} color="#059669" />
+                                </div>
+                            </div>
                         </div>
                     )}
 
                     {document.burn_after_reading && (
-                        <div style={{ marginTop: '1rem', padding: '0.75rem', background: '#fff7ed', border: '1px solid #ffedd5', borderRadius: '12px', color: '#c2410c', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <Flame size={18} />
-                            <span><strong>Burn After Reading:</strong> This file will be deleted permanently after you download it.</span>
+                        <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#fff7ed', border: '1px solid #ffedd5', borderRadius: '12px', color: '#c2410c', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <Flame size={20} />
+                            <span><strong>Burn After Reading:</strong> This file will be deleted permanently after the first view/download.</span>
                         </div>
                     )}
+
                 </div>
+
+                {/* Branding Footer */}
+                {branding?.site_url && (
+                    <a href={branding.site_url} target="_blank" rel="noopener noreferrer" style={{ marginTop: '2rem', color: '#9ca3af', textDecoration: 'none', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        Visit {new URL(branding.site_url).hostname} <ArrowRight size={14} />
+                    </a>
+                )}
             </div>
         </div>
     );
 };
-
 export default ViewDocument;

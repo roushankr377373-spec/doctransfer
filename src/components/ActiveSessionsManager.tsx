@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Monitor, MapPin, Calendar, Ban, RefreshCw, Shield } from 'lucide-react';
-import { getAccessStats, revokeSession, revokeDocumentAccess } from '../lib/drmController';
+import { Monitor, Ban, RefreshCw, Shield } from 'lucide-react';
+import { getAccessStats, revokeDocumentAccess } from '../lib/drmController';
 
 interface ActiveSessionsManagerProps {
     documentId: string;

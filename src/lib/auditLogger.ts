@@ -139,6 +139,34 @@ export async function logDocumentView(
         userEmail: context?.userEmail,
         metadata: context?.metadata
     });
+
+    // Trigger Email Notification (Standard/Business Plan feature)
+    try {
+        // Fetch document owner to get their ID and Settings
+        const { data: doc } = await supabase
+            .from('documents')
+            .select('user_id, name')
+            .eq('id', documentId)
+            .single();
+
+        if (doc?.user_id) {
+            // Check if user has email notifications enabled (you might want to cache this or add a check)
+            // For now, we'll try to send and let the Edge Function handle checks or just send it.
+            // Ideally, we check branding_settings or a new notification_settings table.
+
+            // Invoke Edge Function
+            await supabase.functions.invoke('send-email-notification', {
+                body: {
+                    documentName: doc.name,
+                    viewerEmail: context?.userEmail || 'Anonymous',
+                    timestamp: new Date().toISOString(),
+                    ownerUserId: doc.user_id // Pass ID, let Function fetch email to be secure
+                }
+            });
+        }
+    } catch (e) {
+        console.error('Failed to trigger notification:', e);
+    }
 }
 
 /**

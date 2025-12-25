@@ -19,11 +19,20 @@ import {
   ScrollText,
   Activity,
   BarChart3,
-  Bell
+  Bell,
+  Flame,
+  Fingerprint,
+  Camera,
+  PenTool,
+  Clock
 } from 'lucide-react';
+import LanguageSelector from './components/LanguageSelector';
+import { useTranslation } from 'react-i18next';
 
 const LandingPage: React.FC = () => {
+  const { t } = useTranslation();
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [showProductMenu, setShowProductMenu] = useState(false);
 
   const toggleFaq = (index: number) => {
     setOpenFaq(openFaq === index ? null : index);
@@ -86,9 +95,108 @@ const LandingPage: React.FC = () => {
         <Logo size={32} />
         <nav>
           <div className="nav-links">
-            <a href="#features">Features</a>
-            <a href="#pricing">Pricing</a>
+            <div
+              className="nav-item-dropdown"
+              style={{ position: 'relative', display: 'inline-block' }}
+              onMouseEnter={() => setShowProductMenu(true)}
+              onMouseLeave={() => setShowProductMenu(false)}
+            >
+              <button
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#6b7280',
+                  fontWeight: 500,
+                  fontSize: '1rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                  padding: '0'
+                }}
+              >
+                Product <ChevronDown size={16} />
+              </button>
+
+              {showProductMenu && (
+                <div
+                  className="product-dropdown"
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: '-50px',
+                    width: '600px',
+                    background: 'white',
+                    borderRadius: '16px',
+                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                    padding: '2rem',
+                    zIndex: 1000,
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '2rem',
+                    border: '1px solid #f3f4f6'
+                  }}
+                >
+                  <div>
+                    <h4 style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', color: '#9ca3af', marginBottom: '1rem', letterSpacing: '0.05em' }}>Core Security</h4>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {[
+                        { name: 'Secure Transfer', icon: Shield, desc: 'Encrypted document sharing' },
+                        { name: 'End-to-End Encryption', icon: Lock, desc: 'Zero-knowledge architecture' },
+                        { name: 'Password Protection', icon: Lock, desc: 'Access control with passwords' },
+                        { name: 'Email Verification', icon: Mail, desc: 'Confirm recipient identity' },
+                        { name: 'Link Expiration', icon: Clock, desc: 'Time-limited access' },
+                        { name: 'Burn After Reading', icon: Flame, desc: 'Self-destructing files' },
+                      ].map((feature, i) => (
+                        <li key={i}>
+                          <a href="#features" style={{ textDecoration: 'none', display: 'flex', alignItems: 'start', gap: '0.75rem', color: '#1f2937' }}>
+                            <div style={{ padding: '0.35rem', background: '#eff6ff', borderRadius: '6px', color: '#4f46e5' }}>
+                              <feature.icon size={16} />
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: '600', fontSize: '0.9rem' }}>{feature.name}</div>
+                              <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>{feature.desc}</div>
+                            </div>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', color: '#9ca3af', marginBottom: '1rem', letterSpacing: '0.05em' }}>Advanced Features</h4>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {[
+                        { name: 'Dynamic Watermarking', icon: Droplets, desc: 'Traceable document overlays' },
+                        { name: 'Biometric Lock', icon: Fingerprint, desc: 'Fingerprint & Face ID access' },
+                        { name: 'Webcam Snapshot', icon: Camera, desc: 'Photo verification on view' },
+                        { name: 'E-Signature', icon: PenTool, desc: 'Legally binding signatures' },
+                        { name: 'Deep Analytics', icon: BarChart3, desc: 'Page-level engagement tracking' },
+                        { name: 'Audit Trails', icon: FileCheck, desc: 'Complete activity logs' },
+                      ].map((feature, i) => (
+                        <li key={i}>
+                          <a href="#features" style={{ textDecoration: 'none', display: 'flex', alignItems: 'start', gap: '0.75rem', color: '#1f2937' }}>
+                            <div style={{ padding: '0.35rem', background: '#f5f3ff', borderRadius: '6px', color: '#7c3aed' }}>
+                              <feature.icon size={16} />
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: '600', fontSize: '0.9rem' }}>{feature.name}</div>
+                              <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>{feature.desc}</div>
+                            </div>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Link to="/pricing">Pricing</Link>
             <a href="#security">Security</a>
+          </div>
+          <div style={{ marginRight: '1rem' }}>
+            <LanguageSelector />
           </div>
           <SignedOut>
             <SignInButton mode="modal">
@@ -126,10 +234,12 @@ const LandingPage: React.FC = () => {
           <h1 className="hero-title-animated">Securely Sharing, Tracking and Manage All Document</h1>
           <p className="hero-subtitle-animated">Share documents securely with real-time insights and control. Join over 10,000+ teams who trust DocTransfer.</p>
           <div className="hero-actions">
-            <Link to="/dataroom">
+            <Link to="/pricing">
               <button className="btn-primary">Get Started Free</button>
             </Link>
-            <button className="btn-secondary">View Pricing</button>
+            <Link to="/pricing">
+              <button className="btn-secondary">View Pricing</button>
+            </Link>
           </div>
 
           <div className="transfer-animation-container">
@@ -400,7 +510,7 @@ const LandingPage: React.FC = () => {
               Join thousands of professionals who trust DocTransfer for their document sharing needs.
             </p>
             <div className="cta-buttons">
-              <Link to="/dataroom">
+              <Link to="/pricing">
                 <button className="btn-white">Get Started Now</button>
               </Link>
               <button style={{ background: 'transparent', border: '1px solid white', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: 600, cursor: 'pointer' }}>Contact Sales</button>
