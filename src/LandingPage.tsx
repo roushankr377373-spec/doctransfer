@@ -235,10 +235,10 @@ const LandingPage: React.FC = () => {
           <p className="hero-subtitle-animated">Share documents securely with real-time insights and control. Join over 10,000+ teams who trust DocTransfer.</p>
           <div className="hero-actions">
             <Link to="/pricing">
-              <button className="btn-primary">Get Started Free</button>
+              <button className="hero-btn-primary">Get Started Free</button>
             </Link>
             <Link to="/pricing">
-              <button className="btn-secondary">View Pricing</button>
+              <button className="hero-btn-secondary">View Pricing</button>
             </Link>
           </div>
 
