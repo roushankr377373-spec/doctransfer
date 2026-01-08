@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Environment Variable Checker</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+
+        .card {
+            background: #252526;
+            border: 1px solid #3e3e42;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            color: #4ec9b0;
+            margin-top: 0;
+        }
+
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border-left: 4px solid;
+        }
+
+        .success {
+            background: #0e2f1f;
+            border-left-color: #4caf50;
+            color: #4caf50;
+        }
+
+        .error {
+            background: #2f0e0e;
+            border-left-color: #f44336;
+            color: #f44336;
+        }
+
+        .warning {
+            background: #2f2a0e;
+            border-left-color: #ff9800;
+            color: #ff9800;
+        }
+
+        .info {
+            background: #0e1f2f;
+            border-left-color: #2196f3;
+            color: #2196f3;
+        }
+
+        pre {
+            background: #1e1e1e;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            border: 1px solid #3e3e42;
+        }
+
+        button {
+            background: #4ec9b0;
+            color: #1e1e1e;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        button:hover {
+            background: #5ed3ba;
+        }
+
+        code {
+            background: #1e1e1e;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #ce9178;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h1>🔍 Environment Variable Checker</h1>
+        <p>This tool checks if your .env file is loaded correctly in the browser</p>
+        <button onclick="checkEnvironment()">Check Environment Variables</button>
+        <button onclick="window.location.href='http://localhost:5173'">Go to App</button>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        function checkEnvironment() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<h2 style="color: #4ec9b0; margin-top: 20px;">Results:</h2>';
+
+            // Check current location
+            results.innerHTML += `
+                <div class="status info">
+                    <strong>Current Location:</strong><br>
+                    ${window.location.href}
+                </div>
+            `;
+
+            // Try to access Vite env variables
+            let supabaseUrl, supabaseKey, clerkKey;
+
+            try {
+                // These will only work if this file is served by Vite dev server
+                supabaseUrl = import.meta?.env?.VITE_SUPABASE_URL;
+                supabaseKey = import.meta?.env?.VITE_SUPABASE_ANON_KEY;
+                clerkKey = import.meta?.env?.VITE_CLERK_PUBLISHABLE_KEY;
+            } catch (e) {
+                results.innerHTML += `
+                    <div class="status error">
+                        <strong>❌ ERROR:</strong> This page must be served through Vite dev server to check environment variables<br><br>
+                        <strong>Solution:</strong> Copy this HTML into your <code>public/</code> folder and access it at:<br>
+                        <code>http://localhost:5173/env-check.html</code>
+                    </div>
+                `;
+                return;
+            }
+
+            // Check Supabase URL
+            results.innerHTML += '<h3 style="color: #569cd6; margin-top: 20px;">Supabase Configuration:</h3>';
+
+            if (!supabaseUrl) {
+                results.innerHTML += `
+                    <div class="status error">
+                        <strong>❌ VITE_SUPABASE_URL is missing!</strong><br>
+                        Your .env file doesn't have VITE_SUPABASE_URL or it's not loading
+                    </div>
+                `;
+            } else if (supabaseUrl.includes('supabase.com/dashboard')) {
+                results.innerHTML += `
+                    <div class="status error">
+                        <strong>❌ WRONG SUPABASE URL FORMAT!</strong><br><br>
+                        <strong>Current value:</strong><br>
+                        <code>${supabaseUrl}</code><br><br>
+                        <strong>Problem:</strong> This is the dashboard URL, not the API URL!<br><br>
+                        <strong>Fix:</strong><br>
+                        1. Go to Supabase Dashboard → Settings → API<br>
+                        2. Copy the "Project URL" (looks like: <code>https://abc123.supabase.co</code>)<br>
+                        3. Update your .env file:<br>
+                        <pre>VITE_SUPABASE_URL=https://your-project-id.supabase.co</pre>
+                        4. Restart dev server
+                    </div>
+                `;
+            } else if (supabaseUrl.match(/^https:\/\/[a-z0-9]+\.supabase\.co$/)) {
+                results.innerHTML += `
+                    <div class="status success">
+                        <strong>✅ VITE_SUPABASE_URL looks correct!</strong><br>
+                        <code>${supabaseUrl}</code>
+                    </div>
+                `;
+            } else {
+                results.innerHTML += `
+                    <div class="status warning">
+                        <strong>⚠️ VITE_SUPABASE_URL format looks unusual</strong><br>
+                        <code>${supabaseUrl}</code><br><br>
+                        Expected format: <code>https://[project-id].supabase.co</code>
+                    </div>
+                `;
+            }
+
+            // Check Supabase Key
+            if (!supabaseKey) {
+                results.innerHTML += `
+                    <div class="status error">
+                        <strong>❌ VITE_SUPABASE_ANON_KEY is missing!</strong>
+                    </div>
+                `;
+            } else if (supabaseKey.startsWith('eyJ')) {
+                results.innerHTML += `
+                    <div class="status success">
+                        <strong>✅ VITE_SUPABASE_ANON_KEY exists</strong><br>
+                        (${supabaseKey.substring(0, 30)}...)
+                    </div>
+                `;
+            } else {
+                results.innerHTML += `
+                    <div class="status warning">
+                        <strong>⚠️ VITE_SUPABASE_ANON_KEY format looks unusual</strong><br>
+                        Should start with 'eyJ'
+                    </div>
+                `;
+            }
+
+            // Check Clerk Key
+            results.innerHTML += '<h3 style="color: #569cd6; margin-top: 20px;">Clerk Configuration:</h3>';
+
+            if (!clerkKey) {
+                results.innerHTML += `
+                    <div class="status error">
+                        <strong>❌ VITE_CLERK_PUBLISHABLE_KEY is missing!</strong>
+                    </div>
+                `;
+            } else {
+                results.innerHTML += `
+                    <div class="status success">
+                        <strong>✅ VITE_CLERK_PUBLISHABLE_KEY exists</strong><br>
+                        (${clerkKey.substring(0, 30)}...)
+                    </div>
+                `;
+            }
+
+            // Test CORS if Supabase URL is present
+            if (supabaseUrl && supabaseUrl.match(/^https:\/\/[a-z0-9]+\.supabase\.co$/)) {
+                results.innerHTML += '<h3 style="color: #569cd6; margin-top: 20px;">CORS Test:</h3>';
+                results.innerHTML += `<div class="status info">Testing connection to ${supabaseUrl}...</div>`;
+
+                fetch(`${supabaseUrl}/rest/v1/`, {
+                    method: 'GET',
+                    headers: {
+                        'apikey': supabaseKey || 'test',
+                        'Content-Type': 'application/json'
+                    }
+                })
+                    .then(response => {
+                        if (response.ok || response.status === 401 || response.status === 400) {
+                            results.innerHTML += `
+                            <div class="status success">
+                                <strong>✅ CORS TEST PASSED!</strong><br>
+                                Response status: ${response.status}<br>
+                                Supabase is accepting requests from ${window.location.origin}
+                            </div>
+                        `;
+                        } else {
+                            results.innerHTML += `
+                            <div class="status warning">
+                                <strong>⚠️ Unexpected response: ${response.status}</strong>
+                            </div>
+                        `;
+                        }
+                    })
+                    .catch(error => {
+                        if (error.message && error.message.toLowerCase().includes('cors')) {
+                            results.innerHTML += `
+                            <div class="status error">
+                                <strong>❌ CORS ERROR DETECTED!</strong><br><br>
+                                <strong>Problem:</strong> Supabase is blocking requests from:<br>
+                                <code>${window.location.origin}</code><br><br>
+                                <strong>Solution:</strong><br>
+                                1. Go to <a href="https://supabase.com/dashboard" target="_blank" style="color: #4ec9b0;">Supabase Dashboard</a><br>
+                                2. Settings → API → scroll to "Additional Allowed Origins"<br>
+                                3. Add: <code>${window.location.origin}</code><br>
+                                4. Click Save and wait 60 seconds<br>
+                                5. Hard refresh this page (Ctrl+Shift+R)
+                            </div>
+                        `;
+                        } else {
+                            results.innerHTML += `
+                            <div class="status error">
+                                <strong>❌ Connection Error:</strong><br>
+                                ${error.message}
+                            </div>
+                        `;
+                        }
+                    });
+            }
+
+            // Summary
+            results.innerHTML += `
+                <h3 style="color: #569cd6; margin-top: 20px;">Next Steps:</h3>
+                <div class="status info">
+                    If all checks pass but uploads still fail:<br><br>
+                    1. Check browser console on the main app for errors<br>
+                    2. Make sure dev server was restarted after .env changes<br>
+                    3. Clear browser cache (Ctrl+Shift+R)<br>
+                    4. Try uploading a small file (< 1MB) first
+                </div>
+            `;
+        }
+
+        // Auto-run on page load
+        window.onload = () => {
+            checkEnvironment();
+        };
+    </script>
+</body>
+
+</html>

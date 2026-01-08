@@ -1,0 +1,50 @@
+{
+    "nav": {
+        "features": "Features",
+        "howItWorks": "How It Works",
+        "pricing": "Pricing",
+        "login": "Secure Login",
+        "getStarted": "Get Started Free"
+    },
+    "hero": {
+        "title": "Secure Document Sharing",
+        "subtitle": "Enterprise-grade encryption for your most sensitive files.",
+        "cta": "Start Sharing Securely",
+        "trustedBy": "Trusted by security-conscious teams worldwide"
+    },
+    "stats": {
+        "documents": "Documents Protected",
+        "users": "Active Users",
+        "uptime": "Uptime Guarantee"
+    },
+    "dashboard": {
+        "title": "DocTransfer Dashboard",
+        "welcome": "Welcome back! Here's what's happening.",
+        "team": "Team",
+        "upload": "Upload Document",
+        "googleDrive": "Google Drive",
+        "documents": "Documents",
+        "analytics": "Analytics",
+        "auditTrail": "Audit Trail",
+        "myDocuments": "My Documents",
+        "search": "Search documents...",
+        "noDocs": "No documents found",
+        "uploadFirst": "Upload your first document to get started."
+    },
+    "view": {
+        "accessDenied": "Access Denied",
+        "passwordTitle": "Protected Content",
+        "passwordDesc": "This file is secured.",
+        "emailTitle": "Email Verification",
+        "emailPlaceholder": "Enter your email address",
+        "passwordPlaceholder": "Enter password",
+        "unlock": "Unlock Access",
+        "verify": "Verify & Access",
+        "sendCode": "Send Verification Code",
+        "changeEmail": "Change Email",
+        "download": "Download",
+        "downloadEncrypted": "Download Encrypted",
+        "downloadOriginal": "Download Original",
+        "poweredBy": "Powered by DocTransfer"
+    }
+}

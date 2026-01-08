@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORS Diagnostic Tool</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 24px;
+        }
+        .status {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin: 8px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #4338ca;
+        }
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .section-title {
+            font-weight: 600;
+            color: #374151;
+            margin-top: 20px;
+            margin-bottom: 12px;
+            font-size: 16px;
+        }
+        #results {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🔍 CORS Diagnostic Tool</h1>
+        <p class="subtitle">This tool will help diagnose your Supabase CORS configuration issues</p>
+        
+        <div class="section-title">Step 1: Enter Your Supabase URL</div>
+        <input type="text" id="supabaseUrl" placeholder="https://your-project.supabase.co" 
+               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-family: monospace;">
+        
+        <div class="section-title">Step 2: Run Diagnostics</div>
+        <button onclick="runDiagnostics()" id="diagnoseBtn">Run CORS Test</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <div class="card" style="background: #fef3c7; border: 2px solid #f59e0b;">
+        <h3 style="color: #92400e; margin-top: 0;">⚠️ Common CORS Issues & Solutions</h3>
+        
+        <div style="margin: 16px 0;">
+            <strong>Issue 1: Wrong Supabase URL Format</strong>
+            <div class="status error" style="margin-top: 8px;">
+                ❌ Wrong: https://supabase.com/dashboard/project/abc123/...
+            </div>
+            <div class="status success" style="margin-top: 8px;">
+                ✅ Correct: https://abc123.supabase.co
+            </div>
+        </div>
+
+        <div style="margin: 16px 0;">
+            <strong>Issue 2: Missing Localhost in CORS Settings</strong>
+            <div class="status info">
+                Go to: Supabase Dashboard → Settings → API → Additional Allowed Origins<br>
+                Add: <code>http://localhost:5173</code>
+            </div>
+        </div>
+
+        <div style="margin: 16px 0;">
+            <strong>Issue 3: Multiple localhost ports</strong>
+            <div class="status warning">
+                If you have multiple dev servers running, add all ports:<br>
+                • http://localhost:5173<br>
+                • http://localhost:5174<br>
+                • http://127.0.0.1:5173
+            </div>
+        </div>
+
+        <div style="margin: 16px 0;">
+            <strong>Issue 4: Changes not propagated</strong>
+            <div class="status info">
+                After changing CORS settings:<br>
+                1. Wait 30-60 seconds<br>
+                2. Hard refresh browser (Ctrl+Shift+R)<br>
+                3. Clear browser cache
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function runDiagnostics() {
+            const resultsDiv = document.getElementById('results');
+            const supabaseUrl = document.getElementById('supabaseUrl').value.trim();
+            const diagnoseBtn = document.getElementById('diagnoseBtn');
+            
+            resultsDiv.innerHTML = '';
+            diagnoseBtn.disabled = true;
+            
+            // Check URL format
+            resultsDiv.innerHTML += '<div class="section-title">🔎 Checking Supabase URL Format...</div>';
+            
+            if (!supabaseUrl) {
+                resultsDiv.innerHTML += '<div class="status error">❌ Please enter your Supabase URL</div>';
+                diagnoseBtn.disabled = false;
+                return;
+            }
+            
+            // Validate URL format
+            const correctFormat = /^https:\/\/[a-z0-9]+\.supabase\.co$/;
+            const wrongDashboard = supabaseUrl.includes('supabase.com/dashboard');
+            
+            if (wrongDashboard) {
+                resultsDiv.innerHTML += `
+                    <div class="status error">
+                        ❌ ERROR: You're using the dashboard URL, not the API URL!<br><br>
+                        <strong>Your URL:</strong> ${supabaseUrl}<br><br>
+                        <strong>This is wrong!</strong> This points to the Supabase dashboard interface, not your project's API.<br><br>
+                        <strong>Fix:</strong> Go to Supabase Dashboard → Settings → API → copy the "Project URL"<br>
+                        It should look like: <code>https://abc123xyz.supabase.co</code>
+                    </div>
+                `;
+                diagnoseBtn.disabled = false;
+                return;
+            }
+            
+            if (!correctFormat.test(supabaseUrl)) {
+                resultsDiv.innerHTML += `
+                    <div class="status warning">
+                        ⚠️ WARNING: URL format looks unusual<br><br>
+                        <strong>Your URL:</strong> ${supabaseUrl}<br>
+                        <strong>Expected format:</strong> https://[project-id].supabase.co<br><br>
+                        Make sure this is correct before proceeding.
+                    </div>
+                `;
+            } else {
+                resultsDiv.innerHTML += '<div class="status success">✅ URL format looks correct</div>';
+            }
+            
+            // Check current location
+            resultsDiv.innerHTML += '<div class="section-title">📍 Checking Current Location...</div>';
+            const currentOrigin = window.location.origin;
+            resultsDiv.innerHTML += `<div class="status info">Current origin: <code>${currentOrigin}</code></div>`;
+            
+            if (!currentOrigin.includes('localhost') && !currentOrigin.includes('127.0.0.1')) {
+                resultsDiv.innerHTML += `
+                    <div class="status warning">
+                        ⚠️ You're not running on localhost. Make sure to add this origin to CORS settings:<br>
+                        <code>${currentOrigin}</code>
+                    </div>
+                `;
+            }
+            
+            // Test CORS
+            resultsDiv.innerHTML += '<div class="section-title">🌐 Testing CORS Connection...</div>';
+            
+            try {
+                const response = await fetch(`${supabaseUrl}/rest/v1/`, {
+                    method: 'GET',
+                    headers: {
+                        'apikey': 'test',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok || response.status === 401 || response.status === 400) {
+                    resultsDiv.innerHTML += `
+                        <div class="status success">
+                            ✅ CORS is working! Response received (status: ${response.status})<br><br>
+                            This means Supabase is accepting requests from <code>${currentOrigin}</code>
+                        </div>
+                    `;
+                    
+                    // Check CORS headers
+                    const corsHeader = response.headers.get('access-control-allow-origin');
+                    if (corsHeader) {
+                        resultsDiv.innerHTML += `
+                            <div class="status info">
+                                <strong>CORS Header Found:</strong><br>
+                                Access-Control-Allow-Origin: ${corsHeader}
+                            </div>
+                        `;
+                    }
+                } else {
+                    resultsDiv.innerHTML += `
+                        <div class="status error">
+                            ❌ Unexpected status: ${response.status}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                if (error.message && error.message.includes('CORS')) {
+                    resultsDiv.innerHTML += `
+                        <div class="status error">
+                            ❌ CORS ERROR DETECTED!<br><br>
+                            <strong>Problem:</strong> Supabase is blocking requests from ${currentOrigin}<br><br>
+                            <strong>Solution:</strong><br>
+                            1. Go to <a href="https://supabase.com/dashboard" target="_blank">Supabase Dashboard</a><br>
+                            2. Select your project<br>
+                            3. Settings → API → scroll to "Additional Allowed Origins"<br>
+                            4. Add: <code>${currentOrigin}</code><br>
+                            5. Click Save and wait 30 seconds<br>
+                            6. Hard refresh this page (Ctrl+Shift+R)
+                        </div>
+                    `;
+                } else {
+                    resultsDiv.innerHTML += `
+                        <div class="status error">
+                            ❌ Connection Error<br><br>
+                            <strong>Error:</strong> ${error.message}<br><br>
+                            <strong>Possible causes:</strong><br>
+                            • Incorrect Supabase URL<br>
+                            • Network connectivity issues<br>
+                            • Supabase service down<br>
+                            • Firewall blocking requests
+                        </div>
+                    `;
+                }
+            }
+            
+            // Final recommendations
+            resultsDiv.innerHTML += `
+                <div class="section-title">💡 Next Steps</div>
+                <div class="status info">
+                    <strong>If you're still seeing CORS errors in your app:</strong><br><br>
+                    1. Verify your .env file has the correct URL: <code>${supabaseUrl}</code><br>
+                    2. Stop all dev servers (Ctrl+C in all terminals)<br>
+                    3. Kill any zombie processes: check Task Manager for multiple node processes<br>
+                    4. Start dev server again: <code>npm run dev</code><br>
+                    5. Hard refresh browser: <code>Ctrl+Shift+R</code><br>
+                    6. Check browser console for additional errors
+                </div>
+            `;
+            
+            diagnoseBtn.disabled = false;
+        }
+    </script>
+</body>
+</html>
