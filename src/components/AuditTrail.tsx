@@ -162,9 +162,6 @@ const AuditTrail: React.FC<AuditTrailProps> = ({ documentId }) => {
                                             <span className="font-medium text-gray-900">
                                                 {log.user_email || log.signer_name || 'Anonymous User'}
                                             </span>
-                                            <span className="text-xs text-gray-500 flex items-center gap-1">
-                                                <Globe size={10} /> {log.ip_address || 'Unknown IP'}
-                                            </span>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-gray-600">
