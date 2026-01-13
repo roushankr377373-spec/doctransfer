@@ -202,7 +202,7 @@ const ViewDocument: React.FC = () => {
 
         // Check Max Views (Burn After Reading Fail-safe)
         if (data.max_views && (data.view_count || 0) >= data.max_views) {
-            setError('This document has reached its view limit and is no longer accessible.');
+            setError(`This document is self-destructed. The view limit (${data.max_views}) has been reached.`);
             return;
         }
 

@@ -21,7 +21,10 @@ import {
     UserPlus,
     Fingerprint,
     Flame,
-    Settings
+    Settings,
+    Clock,
+    Minus,
+    Plus
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { encryptFile } from './lib/crypto';
@@ -38,6 +41,7 @@ import useSubscription from './hooks/useSubscription';
 import PremiumBadge from './components/PremiumBadge';
 import UpgradeModal from './components/UpgradeModal';
 import UsageLimitBanner from './components/UsageLimitBanner';
+import SelfDestructSettings from './components/SelfDestructSettings';
 
 interface Document {
     id: string;
@@ -102,7 +106,12 @@ const DataRoom: React.FC = () => {
         layout: 'tiled'
     });
 
-    const [burnAfterRead, setBurnAfterRead] = useState(false);
+    const [expirationMode, setExpirationMode] = useState<'date' | 'duration'>('date');
+    const [durationValue, setDurationValue] = useState(1);
+    const [durationUnit, setDurationUnit] = useState<'hours' | 'days' | 'weeks'>('hours');
+
+    const [maxViewsEnabled, setMaxViewsEnabled] = useState(false);
+    const [maxViews, setMaxViews] = useState(1);
     const [vaultMode, setVaultMode] = useState(false);
 
     // New Biometric State
@@ -292,7 +301,9 @@ const DataRoom: React.FC = () => {
                         share_link: bundleShareLink,
                         user_id: user?.id || null,
                         password: passwordProtection ? await hashPassword(password) : null,
-                        expires_at: linkExpiration ? expiresAt : null,
+                        expires_at: linkExpiration ? (
+                            expirationMode === 'date' ? expiresAt : new Date(Date.now() + durationValue * (durationUnit === 'hours' ? 3600000 : durationUnit === 'days' ? 86400000 : 604800000)).toISOString()
+                        ) : null,
                         require_biometric: requireBiometric,
                         require_email_verification: emailVerification,
                         allowed_email: emailVerification ? allowedEmail : null
@@ -375,7 +386,9 @@ const DataRoom: React.FC = () => {
                         // Inherit settings from UI
                         allow_download: allowDownloads,
                         password: passwordProtection ? await hashPassword(password) : null,
-                        expires_at: linkExpiration ? expiresAt : null,
+                        expires_at: linkExpiration ? (
+                            expirationMode === 'date' ? expiresAt : new Date(Date.now() + durationValue * (durationUnit === 'hours' ? 3600000 : durationUnit === 'days' ? 86400000 : 604800000)).toISOString()
+                        ) : null,
                         custom_domain: null,
                         screenshot_protection: screenshotProtection,
                         email_verification: emailVerification,
@@ -384,8 +397,8 @@ const DataRoom: React.FC = () => {
                         watermark_config: applyWatermark ? watermarkConfig : null,
                         require_biometric: requireBiometric,
                         biometric_credential_id: requireBiometric ? biometricCredentialId : null,
-                        max_views: burnAfterRead ? 1 : null,
-                        burn_after_reading: burnAfterRead,
+                        max_views: maxViewsEnabled ? maxViews : null,
+                        burn_after_reading: maxViewsEnabled, // Legacy flag, now used generally for "has view limit"
 
                         // Encryption / Vault Fields
                         is_vault_file: vaultMode,
@@ -877,57 +890,6 @@ const DataRoom: React.FC = () => {
 
 
 
-                                        {/* Link Expiration */}
-                                        <div style={{ padding: '1rem', border: '1px solid #f3f4f6', borderRadius: '12px', background: linkExpiration ? '#eff6ff' : '#ffffff', transition: 'all 0.2s' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: linkExpiration ? '0.75rem' : '0' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                    <div style={{ padding: '8px', background: '#dbeafe', borderRadius: '8px' }}>
-                                                        <Calendar size={18} style={{ color: '#2563eb' }} />
-                                                    </div>
-                                                    <div>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                            <span style={{ fontSize: '0.95rem', fontWeight: '600', color: '#374151' }}>Link Expiration</span>
-                                                            {isFeatureLocked?.('link_expiration') && <PremiumBadge size={14} />}
-                                                        </div>
-                                                        <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>Set an expiry date for the link</span>
-                                                    </div>
-                                                </div>
-                                                <label className="toggle-switch">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={linkExpiration}
-                                                        onChange={(e) => {
-                                                            if (isFeatureLocked?.('link_expiration')) {
-                                                                e.preventDefault();
-                                                                handleLockedFeatureClick('Link Expiration');
-                                                            } else {
-                                                                setLinkExpiration(e.target.checked);
-                                                            }
-                                                        }}
-                                                        disabled={isFeatureLocked?.('link_expiration')}
-                                                    />
-                                                    <span className="toggle-slider"></span>
-                                                </label>
-                                            </div>
-                                            {linkExpiration && (
-                                                <input
-                                                    type="datetime-local"
-                                                    value={expiresAt}
-                                                    onChange={(e) => setExpiresAt(e.target.value)}
-                                                    min={new Date().toISOString().slice(0, 16)}
-                                                    style={{
-                                                        width: '100%',
-                                                        padding: '0.625rem 0.875rem',
-                                                        border: '1px solid #e5e7eb',
-                                                        borderRadius: '8px',
-                                                        fontSize: '0.875rem',
-                                                        outline: 'none',
-                                                        background: 'white'
-                                                    }}
-                                                />
-                                            )}
-                                        </div>
-
                                         {/* Vault Mode */}
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.5rem', padding: '0.75rem', background: '#1e1b4b', borderRadius: '8px', border: '1px solid #4338ca' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -960,355 +922,338 @@ const DataRoom: React.FC = () => {
                                             </div>
                                         </div>
 
-                                    </div>
+                                        {/* Self-Destruct Rules (Expiration & View Limits) */}
+                                        <SelfDestructSettings
+                                            linkExpiration={linkExpiration}
+                                            setLinkExpiration={setLinkExpiration}
+                                            expirationMode={expirationMode}
+                                            setExpirationMode={setExpirationMode}
+                                            durationValue={durationValue}
+                                            setDurationValue={setDurationValue}
+                                            durationUnit={durationUnit}
+                                            setDurationUnit={setDurationUnit}
+                                            expiresAt={expiresAt}
+                                            setExpiresAt={setExpiresAt}
+                                            maxViewsEnabled={maxViewsEnabled}
+                                            setMaxViewsEnabled={setMaxViewsEnabled}
+                                            maxViews={maxViews}
+                                            setMaxViews={setMaxViews}
+                                            isFeatureLocked={isFeatureLocked}
+                                            handleLockedFeatureClick={handleLockedFeatureClick}
+                                        />
 
-                                    {/* Scan Status Badge (for list view, not settings) - keeping placeholder location */}
-
-                                    {/* Burn-on-Read */}
-                                    <div style={{ padding: '1rem', border: '1px solid #f3f4f6', borderRadius: '12px', background: burnAfterRead ? '#fff7ed' : '#ffffff', transition: 'all 0.2s' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                <div style={{ padding: '8px', background: '#ffedd5', borderRadius: '8px' }}>
-                                                    <Flame size={18} style={{ color: '#ea580c' }} />
-                                                </div>
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                        <span style={{ fontSize: '0.95rem', fontWeight: '600', color: '#374151' }}>Burn After Reading</span>
-                                                        {isFeatureLocked?.('burn_after_reading') && <PremiumBadge size={14} />}
+                                        {/* Allow Downloads */}
+                                        <div style={{ padding: '1rem', border: '1px solid #f3f4f6', borderRadius: '12px', background: allowDownloads ? '#f0fdf4' : '#ffffff', transition: 'all 0.2s' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <div style={{ padding: '8px', background: '#dcfce7', borderRadius: '8px' }}>
+                                                        <Download size={18} style={{ color: '#16a34a' }} />
                                                     </div>
-                                                    <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>Delete file after 1 download</span>
-                                                </div>
-                                            </div>
-                                            <label className="toggle-switch">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={burnAfterRead}
-                                                    onChange={(e) => {
-                                                        if (isFeatureLocked?.('burn_after_reading')) {
-                                                            e.preventDefault();
-                                                            handleLockedFeatureClick('Burn After Reading');
-                                                        } else {
-                                                            setBurnAfterRead(e.target.checked);
-                                                        }
-                                                    }}
-                                                    disabled={isFeatureLocked?.('burn_after_reading')}
-                                                />
-                                                <span className="toggle-slider"></span>
-                                            </label>
-                                        </div>
-                                    </div>
-
-                                    {/* Allow Downloads */}
-                                    <div style={{ padding: '1rem', border: '1px solid #f3f4f6', borderRadius: '12px', background: allowDownloads ? '#f0fdf4' : '#ffffff', transition: 'all 0.2s' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                <div style={{ padding: '8px', background: '#dcfce7', borderRadius: '8px' }}>
-                                                    <Download size={18} style={{ color: '#16a34a' }} />
-                                                </div>
-                                                <div>
-                                                    <span style={{ fontSize: '0.95rem', fontWeight: '600', color: '#374151', display: 'block' }}>Allow Downloads</span>
-                                                    <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>Let recipients download the file</span>
-                                                </div>
-                                            </div>
-                                            <label className="toggle-switch">
-                                                <input type="checkbox" checked={allowDownloads} onChange={(e) => setAllowDownloads(e.target.checked)} />
-                                                <span className="toggle-slider"></span>
-                                            </label>
-                                        </div>
-                                    </div>
-
-                                    {/* Screenshot Protection */}
-                                    <div style={{ padding: '1rem', border: '1px solid #f3f4f6', borderRadius: '12px', background: screenshotProtection ? '#fef2f2' : '#ffffff', transition: 'all 0.2s' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                <div style={{ padding: '8px', background: '#fee2e2', borderRadius: '8px' }}>
-                                                    <Shield size={18} style={{ color: '#ef4444' }} />
-                                                </div>
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                        <span style={{ fontSize: '0.95rem', fontWeight: '600', color: '#374151' }}>Screenshot Protection</span>
-                                                        {isFeatureLocked?.('screenshot_protection') && <PremiumBadge size={14} />}
+                                                    <div>
+                                                        <span style={{ fontSize: '0.95rem', fontWeight: '600', color: '#374151', display: 'block' }}>Allow Downloads</span>
+                                                        <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>Let recipients download the file</span>
                                                     </div>
-                                                    <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>Block screen capture attempts</span>
                                                 </div>
+                                                <label className="toggle-switch">
+                                                    <input type="checkbox" checked={allowDownloads} onChange={(e) => setAllowDownloads(e.target.checked)} />
+                                                    <span className="toggle-slider"></span>
+                                                </label>
                                             </div>
-                                            <label className="toggle-switch">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={screenshotProtection}
-                                                    onChange={(e) => {
-                                                        if (isFeatureLocked?.('screenshot_protection')) {
-                                                            e.preventDefault();
-                                                            handleLockedFeatureClick('Screenshot Protection');
-                                                        } else {
-                                                            setScreenshotProtection(e.target.checked);
-                                                        }
-                                                    }}
-                                                    disabled={isFeatureLocked?.('screenshot_protection')}
-                                                />
-                                                <span className="toggle-slider"></span>
-                                            </label>
                                         </div>
-                                    </div>
 
-                                    {/* Email Verification */}
-                                    <div style={{ padding: '1rem', border: '1px solid #f3f4f6', borderRadius: '12px', background: emailVerification ? '#f0f9ff' : '#ffffff', transition: 'all 0.2s' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: emailVerification ? '0.75rem' : '0' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                <div style={{ padding: '8px', background: '#e0f2fe', borderRadius: '8px' }}>
-                                                    <Mail size={18} style={{ color: '#0ea5e9' }} />
-                                                </div>
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                        <span style={{ fontSize: '0.95rem', fontWeight: '600', color: '#374151' }}>Email Verification</span>
-                                                        {isFeatureLocked?.('email_verification') && <PremiumBadge size={14} />}
+                                        {/* Screenshot Protection */}
+                                        <div style={{ padding: '1rem', border: '1px solid #f3f4f6', borderRadius: '12px', background: screenshotProtection ? '#fef2f2' : '#ffffff', transition: 'all 0.2s' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <div style={{ padding: '8px', background: '#fee2e2', borderRadius: '8px' }}>
+                                                        <Shield size={18} style={{ color: '#ef4444' }} />
                                                     </div>
-                                                    <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>Require recipient email</span>
-                                                </div>
-                                            </div>
-                                            <label className="toggle-switch">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={emailVerification}
-                                                    onChange={(e) => {
-                                                        if (isFeatureLocked?.('email_verification')) {
-                                                            e.preventDefault();
-                                                            handleLockedFeatureClick('Email Verification');
-                                                        } else {
-                                                            setEmailVerification(e.target.checked);
-                                                        }
-                                                    }}
-                                                    disabled={isFeatureLocked?.('email_verification')}
-                                                />
-                                                <span className="toggle-slider"></span>
-                                            </label>
-                                        </div>
-                                        {emailVerification && (
-                                            <input
-                                                type="email"
-                                                placeholder="Enter recipient email (optional)"
-                                                value={allowedEmail}
-                                                onChange={(e) => setAllowedEmail(e.target.value)}
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '0.625rem 0.875rem',
-                                                    border: '1px solid #e5e7eb',
-                                                    borderRadius: '8px',
-                                                    fontSize: '0.875rem',
-                                                    outline: 'none',
-                                                    background: 'white'
-                                                }}
-                                            />
-                                        )}
-                                    </div>
-
-                                    {/* Biometric & Snapshot Gates */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1rem', background: '#f0fdf4', borderRadius: '12px', border: '1px solid #bbf7d0' }}>
-                                        <div style={{ paddingBottom: '0.5rem', borderBottom: '1px solid #dcfce7', fontSize: '0.85rem', fontWeight: '600', color: '#166534', letterSpacing: '0.05em' }}>
-                                            SECURITY GATES
-                                        </div>
-
-                                        {/* Biometric Toggle */}
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                <div style={{ padding: '8px', background: '#dcfce7', borderRadius: '8px' }}>
-                                                    <Fingerprint size={18} style={{ color: '#15803d' }} />
-                                                </div>
-                                                <div>
-                                                    <span style={{ fontSize: '0.95rem', fontWeight: '600', color: '#166534', display: 'block' }}>
-                                                        Require Biometrics
-                                                        {isFeatureLocked?.('biometric_auth') && <PremiumBadge size={14} />}
-                                                    </span>
-                                                    <span style={{ fontSize: '0.75rem', color: '#15803d' }}>FaceID / TouchID / Windows Hello</span>
-                                                    {biometricRegistering && <div style={{ fontSize: '0.75rem', color: '#ca8a04', marginTop: '0.2rem' }}>Registering...</div>}
-                                                    {requireBiometric && biometricCredentialId && <div style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '0.2rem' }}>✓ Device registered</div>}
-                                                </div>
-                                            </div>
-                                            <label className="toggle-switch">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={requireBiometric}
-                                                    onChange={(e) => {
-                                                        if (isFeatureLocked?.('biometric_auth')) {
-                                                            e.preventDefault();
-                                                            handleLockedFeatureClick('Biometric Authentication');
-                                                        } else {
-                                                            handleBiometricToggle(e.target.checked);
-                                                        }
-                                                    }}
-                                                    disabled={biometricRegistering || isFeatureLocked?.('biometric_auth')}
-                                                />
-                                                <span className="toggle-slider"></span>
-                                            </label>
-                                        </div>
-                                    </div>
-
-                                    {/* Watermark */}
-                                    <div style={{ padding: '1rem', border: '1px solid #f3f4f6', borderRadius: '12px', background: applyWatermark ? '#f5f3ff' : '#ffffff', transition: 'all 0.2s' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                <div style={{ padding: '8px', background: '#ede9fe', borderRadius: '8px' }}>
-                                                    <ImageIcon size={18} style={{ color: '#8b5cf6' }} />
-                                                </div>
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                        <span style={{ fontSize: '0.95rem', fontWeight: '600', color: '#374151' }}>Apply Dynamic Watermark</span>
-                                                        {isFeatureLocked?.('watermarking') && <PremiumBadge size={14} />}
+                                                    <div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                            <span style={{ fontSize: '0.95rem', fontWeight: '600', color: '#374151' }}>Screenshot Protection</span>
+                                                            {isFeatureLocked?.('screenshot_protection') && <PremiumBadge size={14} />}
+                                                        </div>
+                                                        <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>Block screen capture attempts</span>
                                                     </div>
-                                                    <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>Add overlay to documents</span>
                                                 </div>
-                                            </div>
-                                            <label className="toggle-switch">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={applyWatermark}
-                                                    onChange={(e) => {
-                                                        if (isFeatureLocked?.('watermarking')) {
-                                                            e.preventDefault();
-                                                            handleLockedFeatureClick('Dynamic Watermarking');
-                                                        } else {
-                                                            setApplyWatermark(e.target.checked);
-                                                        }
-                                                    }}
-                                                    disabled={isFeatureLocked?.('watermarking')}
-                                                />
-                                                <span className="toggle-slider"></span>
-                                            </label>
-                                        </div>
-                                        {applyWatermark && (
-                                            <div style={{ marginTop: '1rem', padding: '1rem', background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                                {/* Text Template */}
-                                                <div style={{ marginBottom: '1rem' }}>
-                                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '500', color: '#64748b', marginBottom: '0.25rem' }}>Watermark Text</label>
+                                                <label className="toggle-switch">
                                                     <input
-                                                        type="text"
-                                                        value={watermarkConfig.text}
-                                                        onChange={(e) => setWatermarkConfig({ ...watermarkConfig, text: e.target.value })}
-                                                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.9rem' }}
+                                                        type="checkbox"
+                                                        checked={screenshotProtection}
+                                                        onChange={(e) => {
+                                                            if (isFeatureLocked?.('screenshot_protection')) {
+                                                                e.preventDefault();
+                                                                handleLockedFeatureClick('Screenshot Protection');
+                                                            } else {
+                                                                setScreenshotProtection(e.target.checked);
+                                                            }
+                                                        }}
+                                                        disabled={isFeatureLocked?.('screenshot_protection')}
                                                     />
-                                                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                                                        {['{{email}}', '{{ip}}', '{{date}}'].map(tag => (
-                                                            <button
-                                                                key={tag}
-                                                                onClick={() => setWatermarkConfig(prev => ({ ...prev, text: prev.text + ' ' + tag }))}
-                                                                style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', background: '#e0e7ff', color: '#4338ca', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                                            >
-                                                                + {tag}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-
-                                                {/* Settings Grid */}
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                                    <div>
-                                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '500', color: '#64748b' }}>Color</label>
-                                                        <input
-                                                            type="color"
-                                                            value={watermarkConfig.color}
-                                                            onChange={(e) => setWatermarkConfig({ ...watermarkConfig, color: e.target.value })}
-                                                            style={{ width: '100%', height: '36px', border: 'none', cursor: 'pointer' }}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '500', color: '#64748b' }}>Opacity ({watermarkConfig.opacity})</label>
-                                                        <input
-                                                            type="range"
-                                                            min="0.1" max="1" step="0.1"
-                                                            value={watermarkConfig.opacity}
-                                                            onChange={(e) => setWatermarkConfig({ ...watermarkConfig, opacity: parseFloat(e.target.value) })}
-                                                            style={{ width: '100%' }}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '500', color: '#64748b' }}>Size ({watermarkConfig.fontSize}px)</label>
-                                                        <input
-                                                            type="range"
-                                                            min="12" max="72" step="2"
-                                                            value={watermarkConfig.fontSize}
-                                                            onChange={(e) => setWatermarkConfig({ ...watermarkConfig, fontSize: parseInt(e.target.value) })}
-                                                            style={{ width: '100%' }}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '500', color: '#64748b' }}>Rotation ({watermarkConfig.rotation}°)</label>
-                                                        <input
-                                                            type="range"
-                                                            min="-90" max="90" step="5"
-                                                            value={watermarkConfig.rotation}
-                                                            onChange={(e) => setWatermarkConfig({ ...watermarkConfig, rotation: parseInt(e.target.value) })}
-                                                            style={{ width: '100%' }}
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                {/* Layout Toggle */}
-                                                <div style={{ marginTop: '1rem' }}>
-                                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '500', color: '#64748b', marginBottom: '0.25rem' }}>Layout</label>
-                                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                        <button
-                                                            onClick={() => setWatermarkConfig({ ...watermarkConfig, layout: 'single' })}
-                                                            style={{
-                                                                flex: 1, padding: '0.5rem',
-                                                                background: watermarkConfig.layout === 'single' ? '#3b82f6' : 'white',
-                                                                color: watermarkConfig.layout === 'single' ? 'white' : '#64748b',
-                                                                border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer'
-                                                            }}
-                                                        >
-                                                            Single
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setWatermarkConfig({ ...watermarkConfig, layout: 'tiled' })}
-                                                            style={{
-                                                                flex: 1, padding: '0.5rem',
-                                                                background: watermarkConfig.layout === 'tiled' ? '#3b82f6' : 'white',
-                                                                color: watermarkConfig.layout === 'tiled' ? 'white' : '#64748b',
-                                                                border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer'
-                                                            }}
-                                                        >
-                                                            Tiled
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* Live Preview */}
-                                                <div style={{
-                                                    marginTop: '1rem',
-                                                    height: '150px',
-                                                    background: 'white',
-                                                    border: '1px dashed #cbd5e1',
-                                                    position: 'relative',
-                                                    overflow: 'hidden',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center'
-                                                }}>
-                                                    <div style={{
-                                                        position: 'absolute',
-                                                        inset: 0,
-                                                        display: 'flex',
-                                                        flexWrap: 'wrap',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        transform: `rotate(${watermarkConfig.rotation}deg)`,
-                                                        pointerEvents: 'none'
-                                                    }}>
-                                                        {[...Array(watermarkConfig.layout === 'tiled' ? 6 : 1)].map((_, i) => (
-                                                            <span key={i} style={{
-                                                                color: watermarkConfig.color,
-                                                                opacity: watermarkConfig.opacity,
-                                                                fontSize: `${watermarkConfig.fontSize}px`,
-                                                                margin: '20px',
-                                                                whiteSpace: 'nowrap'
-                                                            }}>
-                                                                {watermarkConfig.text}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                    <span style={{ position: 'relative', zIndex: -1, color: '#94a3b8', fontSize: '0.8rem' }}>Document Content Preview</span>
-                                                </div>
+                                                    <span className="toggle-slider"></span>
+                                                </label>
                                             </div>
-                                        )}
+                                        </div>
+
+                                        {/* Email Verification */}
+                                        <div style={{ padding: '1rem', border: '1px solid #f3f4f6', borderRadius: '12px', background: emailVerification ? '#f0f9ff' : '#ffffff', transition: 'all 0.2s' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: emailVerification ? '0.75rem' : '0' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <div style={{ padding: '8px', background: '#e0f2fe', borderRadius: '8px' }}>
+                                                        <Mail size={18} style={{ color: '#0ea5e9' }} />
+                                                    </div>
+                                                    <div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                            <span style={{ fontSize: '0.95rem', fontWeight: '600', color: '#374151' }}>Email Verification</span>
+                                                            {isFeatureLocked?.('email_verification') && <PremiumBadge size={14} />}
+                                                        </div>
+                                                        <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>Require recipient email</span>
+                                                    </div>
+                                                </div>
+                                                <label className="toggle-switch">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={emailVerification}
+                                                        onChange={(e) => {
+                                                            if (isFeatureLocked?.('email_verification')) {
+                                                                e.preventDefault();
+                                                                handleLockedFeatureClick('Email Verification');
+                                                            } else {
+                                                                setEmailVerification(e.target.checked);
+                                                            }
+                                                        }}
+                                                        disabled={isFeatureLocked?.('email_verification')}
+                                                    />
+                                                    <span className="toggle-slider"></span>
+                                                </label>
+                                            </div>
+                                            {emailVerification && (
+                                                <input
+                                                    type="email"
+                                                    placeholder="Enter recipient email (optional)"
+                                                    value={allowedEmail}
+                                                    onChange={(e) => setAllowedEmail(e.target.value)}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.625rem 0.875rem',
+                                                        border: '1px solid #e5e7eb',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.875rem',
+                                                        outline: 'none',
+                                                        background: 'white'
+                                                    }}
+                                                />
+                                            )}
+                                        </div>
+
+                                        {/* Biometric & Snapshot Gates */}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1rem', background: '#f0fdf4', borderRadius: '12px', border: '1px solid #bbf7d0' }}>
+                                            <div style={{ paddingBottom: '0.5rem', borderBottom: '1px solid #dcfce7', fontSize: '0.85rem', fontWeight: '600', color: '#166534', letterSpacing: '0.05em' }}>
+                                                SECURITY GATES
+                                            </div>
+
+                                            {/* Biometric Toggle */}
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <div style={{ padding: '8px', background: '#dcfce7', borderRadius: '8px' }}>
+                                                        <Fingerprint size={18} style={{ color: '#15803d' }} />
+                                                    </div>
+                                                    <div>
+                                                        <span style={{ fontSize: '0.95rem', fontWeight: '600', color: '#166534', display: 'block' }}>
+                                                            Require Biometrics
+                                                            {isFeatureLocked?.('biometric_auth') && <PremiumBadge size={14} />}
+                                                        </span>
+                                                        <span style={{ fontSize: '0.75rem', color: '#15803d' }}>FaceID / TouchID / Windows Hello</span>
+                                                        {biometricRegistering && <div style={{ fontSize: '0.75rem', color: '#ca8a04', marginTop: '0.2rem' }}>Registering...</div>}
+                                                        {requireBiometric && biometricCredentialId && <div style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '0.2rem' }}>✓ Device registered</div>}
+                                                    </div>
+                                                </div>
+                                                <label className="toggle-switch">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={requireBiometric}
+                                                        onChange={(e) => {
+                                                            if (isFeatureLocked?.('biometric_auth')) {
+                                                                e.preventDefault();
+                                                                handleLockedFeatureClick('Biometric Authentication');
+                                                            } else {
+                                                                handleBiometricToggle(e.target.checked);
+                                                            }
+                                                        }}
+                                                        disabled={biometricRegistering || isFeatureLocked?.('biometric_auth')}
+                                                    />
+                                                    <span className="toggle-slider"></span>
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        {/* Watermark */}
+                                        <div style={{ padding: '1rem', border: '1px solid #f3f4f6', borderRadius: '12px', background: applyWatermark ? '#f5f3ff' : '#ffffff', transition: 'all 0.2s' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <div style={{ padding: '8px', background: '#ede9fe', borderRadius: '8px' }}>
+                                                        <ImageIcon size={18} style={{ color: '#8b5cf6' }} />
+                                                    </div>
+                                                    <div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                            <span style={{ fontSize: '0.95rem', fontWeight: '600', color: '#374151' }}>Apply Dynamic Watermark</span>
+                                                            {isFeatureLocked?.('watermarking') && <PremiumBadge size={14} />}
+                                                        </div>
+                                                        <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>Add overlay to documents</span>
+                                                    </div>
+                                                </div>
+                                                <label className="toggle-switch">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={applyWatermark}
+                                                        onChange={(e) => {
+                                                            if (isFeatureLocked?.('watermarking')) {
+                                                                e.preventDefault();
+                                                                handleLockedFeatureClick('Dynamic Watermarking');
+                                                            } else {
+                                                                setApplyWatermark(e.target.checked);
+                                                            }
+                                                        }}
+                                                        disabled={isFeatureLocked?.('watermarking')}
+                                                    />
+                                                    <span className="toggle-slider"></span>
+                                                </label>
+                                            </div>
+                                            {applyWatermark && (
+                                                <div style={{ marginTop: '1rem', padding: '1rem', background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                    {/* Text Template */}
+                                                    <div style={{ marginBottom: '1rem' }}>
+                                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '500', color: '#64748b', marginBottom: '0.25rem' }}>Watermark Text</label>
+                                                        <input
+                                                            type="text"
+                                                            value={watermarkConfig.text}
+                                                            onChange={(e) => setWatermarkConfig({ ...watermarkConfig, text: e.target.value })}
+                                                            style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.9rem' }}
+                                                        />
+                                                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                                                            {['{{email}}', '{{ip}}', '{{date}}'].map(tag => (
+                                                                <button
+                                                                    key={tag}
+                                                                    onClick={() => setWatermarkConfig(prev => ({ ...prev, text: prev.text + ' ' + tag }))}
+                                                                    style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', background: '#e0e7ff', color: '#4338ca', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                                >
+                                                                    + {tag}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Settings Grid */}
+                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                                        <div>
+                                                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '500', color: '#64748b' }}>Color</label>
+                                                            <input
+                                                                type="color"
+                                                                value={watermarkConfig.color}
+                                                                onChange={(e) => setWatermarkConfig({ ...watermarkConfig, color: e.target.value })}
+                                                                style={{ width: '100%', height: '36px', border: 'none', cursor: 'pointer' }}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '500', color: '#64748b' }}>Opacity ({watermarkConfig.opacity})</label>
+                                                            <input
+                                                                type="range"
+                                                                min="0.1" max="1" step="0.1"
+                                                                value={watermarkConfig.opacity}
+                                                                onChange={(e) => setWatermarkConfig({ ...watermarkConfig, opacity: parseFloat(e.target.value) })}
+                                                                style={{ width: '100%' }}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '500', color: '#64748b' }}>Size ({watermarkConfig.fontSize}px)</label>
+                                                            <input
+                                                                type="range"
+                                                                min="12" max="72" step="2"
+                                                                value={watermarkConfig.fontSize}
+                                                                onChange={(e) => setWatermarkConfig({ ...watermarkConfig, fontSize: parseInt(e.target.value) })}
+                                                                style={{ width: '100%' }}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '500', color: '#64748b' }}>Rotation ({watermarkConfig.rotation}°)</label>
+                                                            <input
+                                                                type="range"
+                                                                min="-90" max="90" step="5"
+                                                                value={watermarkConfig.rotation}
+                                                                onChange={(e) => setWatermarkConfig({ ...watermarkConfig, rotation: parseInt(e.target.value) })}
+                                                                style={{ width: '100%' }}
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Layout Toggle */}
+                                                    <div style={{ marginTop: '1rem' }}>
+                                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '500', color: '#64748b', marginBottom: '0.25rem' }}>Layout</label>
+                                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                            <button
+                                                                onClick={() => setWatermarkConfig({ ...watermarkConfig, layout: 'single' })}
+                                                                style={{
+                                                                    flex: 1, padding: '0.5rem',
+                                                                    background: watermarkConfig.layout === 'single' ? '#3b82f6' : 'white',
+                                                                    color: watermarkConfig.layout === 'single' ? 'white' : '#64748b',
+                                                                    border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                Single
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setWatermarkConfig({ ...watermarkConfig, layout: 'tiled' })}
+                                                                style={{
+                                                                    flex: 1, padding: '0.5rem',
+                                                                    background: watermarkConfig.layout === 'tiled' ? '#3b82f6' : 'white',
+                                                                    color: watermarkConfig.layout === 'tiled' ? 'white' : '#64748b',
+                                                                    border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                Tiled
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Live Preview */}
+                                                    <div style={{
+                                                        marginTop: '1rem',
+                                                        height: '150px',
+                                                        background: 'white',
+                                                        border: '1px dashed #cbd5e1',
+                                                        position: 'relative',
+                                                        overflow: 'hidden',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center'
+                                                    }}>
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            inset: 0,
+                                                            display: 'flex',
+                                                            flexWrap: 'wrap',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transform: `rotate(${watermarkConfig.rotation}deg)`,
+                                                            pointerEvents: 'none'
+                                                        }}>
+                                                            {[...Array(watermarkConfig.layout === 'tiled' ? 6 : 1)].map((_, i) => (
+                                                                <span key={i} style={{
+                                                                    color: watermarkConfig.color,
+                                                                    opacity: watermarkConfig.opacity,
+                                                                    fontSize: `${watermarkConfig.fontSize}px`,
+                                                                    margin: '20px',
+                                                                    whiteSpace: 'nowrap'
+                                                                }}>
+                                                                    {watermarkConfig.text}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                        <span style={{ position: 'relative', zIndex: -1, color: '#94a3b8', fontSize: '0.8rem' }}>Document Content Preview</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* E-Signature */}
