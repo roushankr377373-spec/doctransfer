@@ -35,21 +35,56 @@ serve(async (req) => {
             // Calculate 30 days from now for subscription expiry
             const subscriptionEndDate = new Date();
             subscriptionEndDate.setDate(subscriptionEndDate.getDate() + 30);
+            const periodEndISO = subscriptionEndDate.toISOString();
+            const periodStartISO = new Date().toISOString();
 
-            // Update user profile or subscription table
-            // Assuming 'profiles' table exists and has a 'tier' or 'plan' column.
-            // Adjust this based on actual schema. I will assume a 'tier' column for now.
-            const { error } = await supabase
+            // 1. Update/Insert into subscriptions table (Source of Truth for features)
+            // Check if subscription exists
+            const { data: existingSub } = await supabase
+                .from('subscriptions')
+                .select('id')
+                .eq('user_id', userId)
+                .single();
+
+            if (existingSub) {
+                const { error: subError } = await supabase
+                    .from('subscriptions')
+                    .update({
+                        plan_type: planType, // 'business' or 'standard'
+                        status: 'active',
+                        current_period_start: periodStartISO,
+                        current_period_end: periodEndISO,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('user_id', userId);
+                if (subError) throw subError;
+            } else {
+                const { error: subError } = await supabase
+                    .from('subscriptions')
+                    .insert({
+                        user_id: userId,
+                        plan_type: planType,
+                        status: 'active',
+                        current_period_start: periodStartISO,
+                        current_period_end: periodEndISO,
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                    });
+                if (subError) throw subError;
+            }
+
+            // 2. Update profiles table (Legacy/Profile display)
+            const { error: profileError } = await supabase
                 .from('profiles')
                 .update({
                     tier: planType,
                     subscription_status: 'active',
-                    subscription_end_date: subscriptionEndDate.toISOString(),
+                    subscription_end_date: periodEndISO,
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', userId);
 
-            if (error) throw error;
+            if (profileError) console.error('Error updating profile:', profileError); // Non-blocking
 
             return new Response(
                 JSON.stringify({ success: true, message: "Payment verified and subscription updated" }),
