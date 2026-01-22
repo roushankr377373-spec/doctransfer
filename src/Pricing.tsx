@@ -36,142 +36,9 @@ import {
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 
-interface RazorpayOptions {
-    key: string;
-    amount: number;
-    currency: string;
-    name: string;
-    description: string;
-    image: string;
-    order_id: string;
-    handler: (response: any) => void;
-    prefill: {
-        name: string;
-        email: string;
-        contact: string;
-    };
-    theme: {
-        color: string;
-    };
-}
-
-interface Window {
-    Razorpay: new (options: RazorpayOptions) => any;
-}
-
-
 const Pricing: React.FC = () => {
     const { user } = useUser();
     const navigate = useNavigate();
-    const [loading, setLoading] = useState<string | null>(null);
-    // const [error, setError] = useState<string | null>(null);
-
-
-    const handleSubscribe = async (planType: 'standard' | 'business') => {
-        if (!user) {
-            alert('Please sign in to subscribe.');
-            return;
-        }
-
-        try {
-            setLoading(planType);
-
-            // 1. Create Order
-            // Using direct fetch to debug 400 error seen with invoke()
-            const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-razorpay-order`;
-            console.log('Calling Edge Function:', functionUrl, 'for User:', user.id);
-
-            const response = await fetch(functionUrl, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ planType, userId: user.id })
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                let errorMsg = errorText;
-                try {
-                    const errorJson = JSON.parse(errorText);
-                    errorMsg = errorJson.error || errorJson.message || errorText;
-                } catch {
-                    // Use raw text if not JSON
-                }
-                throw new Error(errorMsg);
-            }
-
-            const orderData = await response.json();
-
-            // 2. Initialize Razorpay
-            console.log('Initializing Razorpay with Key ID:', import.meta.env.VITE_RAZORPAY_KEY_ID);
-            console.log('Order Data:', orderData);
-
-            if (!import.meta.env.VITE_RAZORPAY_KEY_ID) {
-                alert('Configuration Error: Razorpay Key ID is missing. Please restart the dev server.');
-                setLoading(null);
-                return;
-            }
-            const options: RazorpayOptions = {
-                key: import.meta.env.VITE_RAZORPAY_KEY_ID || '', // Make sure to add this prefix if using Vite env vars in frontend, or assume the user added it as RAZORPAY_KEY_ID and we need to verify how Vite exposes it. Usually VITE_ prefix is needed.
-                // Wait, the user said they added keys to .env file. Standard Razorpay keys are often RAZORPAY_KEY_ID. 
-                // But Vite only exposes VITE_ prefixed vars. I should check if I need to ask user to rename or if I can access it.
-                // For now, let's assume VITE_RAZORPAY_KEY_ID. If not, I'll need to ask user to rename it.
-                // Actually, let's try to infer or fallback.
-                amount: orderData.amount,
-                currency: orderData.currency,
-                name: "DocTransfer",
-                description: `${planType.charAt(0).toUpperCase() + planType.slice(1)} Plan Subscription`,
-                image: "https://your-logo-url.com/logo.png", // Replace with actual logo if available
-                order_id: orderData.id,
-                handler: async function (response: any) {
-                    try {
-                        // 3. Verify Payment
-                        const { data: verifyData, error: verifyError } = await supabase.functions.invoke('verify-razorpay-payment', {
-                            body: {
-                                razorpay_order_id: response.razorpay_order_id,
-                                razorpay_payment_id: response.razorpay_payment_id,
-                                razorpay_signature: response.razorpay_signature,
-                                userId: user.id,
-                                planType
-                            }
-                        });
-
-                        if (verifyError) {
-                            const errorMsg = verifyError.message || (verifyError as any).error || 'Verification failed';
-                            throw new Error(errorMsg);
-                        }
-
-                        // alert('Payment Successful! Your subscription is now active.');
-                        // specific logic to update UI or redirect
-                        navigate('/dataroom');
-
-                    } catch (err: any) {
-                        console.error('Verification Error:', err);
-                        alert(`Payment verification failed: ${err.message || JSON.stringify(err)}`);
-                    }
-                },
-                prefill: {
-                    name: user.fullName || '',
-                    email: user.primaryEmailAddress?.emailAddress || '',
-                    contact: '' // Can leave empty or ask user
-                },
-                theme: {
-                    color: "#3b82f6"
-                }
-            };
-
-            const rzp1 = new (window as any).Razorpay(options);
-            rzp1.open();
-
-        } catch (err: any) {
-            console.error('Subscription Error:', err);
-            alert(`Subscription failed: ${err.message}`);
-        } finally {
-            setLoading(null);
-        }
-    };
 
     const plans = [
         {
@@ -547,82 +414,33 @@ const Pricing: React.FC = () => {
                                     )}
                                 </ul>
 
-                                {plan.planType ? (
-                                    <button
-                                        onClick={() => handleSubscribe(plan.planType!)}
-                                        disabled={loading === plan.planType}
-                                        style={{
-                                            width: '100%',
-                                            padding: '1rem',
-                                            borderRadius: '12px',
-                                            border: 'none',
-                                            background: '#3b82f6', // Blue background
-                                            color: 'white',
-                                            fontWeight: 600,
-                                            cursor: loading === plan.planType ? 'not-allowed' : 'pointer',
-                                            transition: 'all 0.2s',
-                                            display: 'flex',
-                                            justifyContent: 'center',
-                                            alignItems: 'center',
-                                            gap: '0.5rem',
-                                            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
-                                        }}
+                                <Link to="/dataroom" name="subscribe-link" style={{ textDecoration: 'none' }}>
+                                    <button style={{
+                                        width: '100%',
+                                        padding: '1rem',
+                                        borderRadius: '12px',
+                                        border: 'none',
+                                        background: '#3b82f6',
+                                        color: 'white',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
+                                    }}
                                         onMouseEnter={e => {
-                                            if (loading !== plan.planType) {
-                                                e.currentTarget.style.transform = 'translateY(-2px)';
-                                                e.currentTarget.style.background = '#2563eb';
-                                                e.currentTarget.style.boxShadow = '0 6px 16px rgba(59, 130, 246, 0.4)';
-                                            }
+                                            e.currentTarget.style.transform = 'translateY(-2px)';
+                                            e.currentTarget.style.background = '#2563eb';
+                                            e.currentTarget.style.boxShadow = '0 6px 16px rgba(59, 130, 246, 0.4)';
                                         }}
                                         onMouseLeave={e => {
-                                            if (loading !== plan.planType) {
-                                                e.currentTarget.style.transform = 'translateY(0)';
-                                                e.currentTarget.style.background = '#3b82f6';
-                                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.3)';
-                                            }
+                                            e.currentTarget.style.transform = 'translateY(0)';
+                                            e.currentTarget.style.background = '#3b82f6';
+                                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.3)';
                                         }}
                                     >
-                                        {loading === plan.planType ? (
-                                            <>
-                                                <Loader2 size={20} className="animate-spin" />
-                                                Processing...
-                                            </>
-                                        ) : (
-                                            <>
-                                                Subscribe
-                                                <Zap size={16} />
-                                            </>
-                                        )}
+                                        {plan.cta}
                                     </button>
-                                ) : (
-                                    <Link to={plan.ctaLink} style={{ textDecoration: 'none' }}>
-                                        <button style={{
-                                            width: '100%',
-                                            padding: '1rem',
-                                            borderRadius: '12px',
-                                            border: 'none',
-                                            background: '#3b82f6',
-                                            color: 'white',
-                                            fontWeight: 600,
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s',
-                                            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
-                                        }}
-                                            onMouseEnter={e => {
-                                                e.currentTarget.style.transform = 'translateY(-2px)';
-                                                e.currentTarget.style.background = '#2563eb';
-                                                e.currentTarget.style.boxShadow = '0 6px 16px rgba(59, 130, 246, 0.4)';
-                                            }}
-                                            onMouseLeave={e => {
-                                                e.currentTarget.style.transform = 'translateY(0)';
-                                                e.currentTarget.style.background = '#3b82f6';
-                                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.3)';
-                                            }}
-                                        >
-                                            {plan.cta}
-                                        </button>
-                                    </Link>
-                                )}
+                                </Link>
                             </div>
                         ))}
                     </div>
