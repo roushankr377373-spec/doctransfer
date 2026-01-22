@@ -145,8 +145,7 @@ const Pricing: React.FC = () => {
                 },
                 prefill: {
                     name: user.fullName || '',
-                    email: user.primaryEmailAddress?.emailAddress || '',
-                    contact: ''
+                    email: user.primaryEmailAddress?.emailAddress || ''
                 },
                 theme: {
                     color: "#3b82f6"
