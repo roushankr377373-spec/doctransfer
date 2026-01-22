@@ -49,7 +49,7 @@ interface RazorpayOptions {
     prefill: {
         name: string;
         email: string;
-        contact: string;
+        contact?: string;
     };
     theme: {
         color: string;
