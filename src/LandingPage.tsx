@@ -40,52 +40,36 @@ const LandingPage: React.FC = () => {
 
   const faqs = [
     {
-      question: "How secure is my data?",
-      answer: "Your files are protected with enterprise-grade security. All data is encrypted in transit with HTTPS/TLS and stored securely in Supabase's encrypted storage. We implement password protection, email verification, and granular access controls to keep your documents safe."
+      question: "What makes 'Vault Mode' different from standard encryption?",
+      answer: "Vault Mode uses client-side (end-to-end) encryption. Your files are encrypted in your browser before they ever leave your device. We never see your password or your files—only the encrypted blob. Even if our servers were compromised, your data would remain unreadable."
     },
     {
-      question: "Can I track who views my documents?",
-      answer: "Yes! Our real-time analytics dashboard shows you exactly who viewed your document, when, for how long, and even which pages they spent the most time on."
+      question: "How does Biometric Access work for recipients?",
+      answer: "When you enable Biometric Gate, recipients must authenticate using FaceID, TouchID, or Windows Hello on their device to view the document. This ensures that only a human present at the device can access the file, adding a physical layer of security beyond just a password."
     },
     {
-      question: "Do recipients need an account?",
-      answer: "No. Recipients can view documents directly in their browser via a secure link without needing to sign up or install any software."
+      question: "Can I use DocTransfer for legally binding signatures?",
+      answer: "Yes. Our E-Signature feature creates a legally binding audit trail, capturing the signer's IP, timestamp, and digital signature. It's perfect for contracts, NDAs, and agreements."
     },
     {
-      question: "Can I update a document after sending it?",
-      answer: "Absolutely. You can update the underlying file at any time without changing the link. Everyone with the link will instantly see the new version."
+      question: "How does the Dynamic Watermark prevent leaks?",
+      answer: "Our dynamic watermarking overlays the recipient's email address, IP address, and time of access directly onto the document view. If someone takes a screenshot or photo, their identity is stamped on the image, acting as a powerful deterrent against unauthorized sharing."
     },
     {
-      question: "What types of files can I share?",
-      answer: "You can share PDFs, Word documents, PowerPoint presentations, Excel spreadsheets, images (JPEG, PNG, GIF), and many other common file formats. Our platform supports virtually any document type."
+      question: "Can I send multiple files at once?",
+      answer: "Absolutely. With Document Bundles, you can upload multiple files (e.g., a contract, a presentation, and a spreadsheet) and share them all via a single secure link. You get unified analytics for the entire package."
     },
     {
-      question: "Is there a file size limit?",
-      answer: "Free accounts can upload files up to 50MB. Premium users enjoy unlimited file sizes, making it easy to share large presentations, high-resolution images, and comprehensive reports."
+      question: "Do recipients need to download an app?",
+      answer: "No downloads required. We pride ourselves on a frictionless experience. Recipients can view high-fidelity documents, unlock protected files, and even sign contracts directly in their secure mobile or desktop browser."
     },
     {
-      question: "How much does DocTransfer cost?",
-      answer: "We offer a generous free tier for individuals. For teams and businesses, our premium plans start at competitive rates with advanced features like custom branding, priority support, and enhanced analytics."
+      question: "What analytics will I see?",
+      answer: "You get granular, real-time tracking. See exactly when your document was opened, how long it was viewed, and a page-by-page breakdown of engagement. You'll know exactly which slide of your pitch deck they spent the most time on."
     },
     {
-      question: "Can I set expiration dates for shared links?",
-      answer: "Yes! You have complete control over link expiration. Set specific dates, time limits, or view count restrictions. Links can also be manually revoked at any time for maximum security."
-    },
-    {
-      question: "How do watermarks work?",
-      answer: "Watermarks are dynamically applied to documents with viewer information like email, timestamp, and IP address. This prevents unauthorized redistribution and helps track document leaks."
-    },
-    {
-      question: "Can recipients sign documents?",
-      answer: "Absolutely! You can request e-signatures from recipients. They can digitally sign documents directly in their browser, and you'll receive instant notifications when signatures are completed."
-    },
-    {
-      question: "Do you integrate with other tools?",
-      answer: "Yes, we integrate with popular tools like Slack, Microsoft Teams, Google Drive, Dropbox, and more. You can also use our API to build custom integrations with your existing workflows."
-    },
-    {
-      question: "How long are my documents stored?",
-      answer: "Documents are stored securely for as long as you need them. Free users get 30 days of storage, while premium users enjoy unlimited storage duration with automatic backups and version history."
+      question: "Is there a free plan?",
+      answer: "Yes! Our Free Plan is generous for individuals. It includes basic password protection, download controls, and up to 10 secure uploads per day. It's not a trial—it's free forever."
     }
   ];
 
@@ -546,7 +530,21 @@ const LandingPage: React.FC = () => {
             </p>
             <div className="cta-buttons">
               <Link to="/pricing">
-                <button className="btn-white">Get Started Now</button>
+                <button style={{
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.75rem 2rem',
+                  borderRadius: '12px',
+                  fontWeight: 700,
+                  fontSize: '1.05rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(37, 99, 235, 0.4)',
+                  transition: 'transform 0.2s'
+                }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                >Get Started Now</button>
               </Link>
               <button style={{ background: 'transparent', border: '1px solid white', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: 600, cursor: 'pointer' }}>Contact Sales</button>
             </div>
@@ -608,11 +606,34 @@ const LandingPage: React.FC = () => {
               <li><a href="#">Cookie Policy</a></li>
             </ul>
           </div>
+          <div className="footer-col">
+            <h4>Contact</h4>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem' }}>
+              <div style={{
+                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                padding: '0.5rem',
+                borderRadius: '8px',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.5)'
+              }}>
+                <Mail size={16} />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: '#9ca3af', fontWeight: 500, textTransform: 'uppercase', marginBottom: '2px' }}>Email Us</div>
+                <a href="mailto:doctransfer144@gmail.com" style={{ color: '#1f2937', fontWeight: 600, textDecoration: 'none', fontSize: '0.95rem', letterSpacing: '-0.01em' }}>
+                  doctransfer144@gmail.com
+                </a>
+              </div>
+            </div>
+          </div>
         </div>
         <div style={{ textAlign: 'center', marginTop: '3rem', color: '#9ca3af', fontSize: '0.875rem' }}>
           &copy; 2025 DocTransfer. All rights reserved.
         </div>
-      </footer>
+      </footer >
     </div >
   );
 };
