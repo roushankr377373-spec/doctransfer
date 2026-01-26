@@ -586,7 +586,7 @@ const Pricing: React.FC = () => {
                                             </>
                                         ) : (
                                             <>
-                                                Subscribe
+                                                Buy Now
                                                 <Zap size={16} />
                                             </>
                                         )}
