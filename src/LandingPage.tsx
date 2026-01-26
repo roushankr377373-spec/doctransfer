@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react';
 import Logo from './components/Logo';
+import SEO from './components/SEO';
 import {
   Shield,
   FileText,
@@ -75,6 +76,11 @@ const LandingPage: React.FC = () => {
 
   return (
     <div className="landing-page">
+      <SEO
+        title="Secure Document Sharing with E2E Encryption & Analytics"
+        description="Share documents securely with end-to-end encryption, dynamic watermarking, real-time analytics & e-signatures. Free DocSend alternative. 10 uploads/day free forever."
+        keywords="secure document sharing, DocSend alternative, end-to-end encryption, dynamic watermarking, document analytics, pitch deck sharing"
+      />
       <header className="header">
         <Logo size={32} />
         <nav>

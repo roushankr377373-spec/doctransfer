@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { SignedIn, SignedOut, SignInButton, UserButton, useUser } from '@clerk/clerk-react';
 import Logo from './components/Logo';
+import SEO from './components/SEO';
 import {
     Check,
     X,
@@ -265,6 +266,12 @@ const Pricing: React.FC = () => {
             color: '#0f172a',
             fontFamily: "'Inter', sans-serif"
         }}>
+            <SEO
+                title="Pricing - Choose Your Plan"
+                description="DocTransfer pricing plans. Free plan with 10 uploads/day forever. Standard at $19/mo with unlimited uploads. Business at $29/mo with Vault Mode encryption."
+                keywords="DocTransfer pricing, secure document sharing plans, DocSend alternative pricing, document analytics pricing"
+                url="https://doctransfer.io/pricing"
+            />
             {/* Header */}
             <header style={{
                 position: 'fixed',

@@ -1,0 +1,30 @@
+# DocTransfer Robots.txt
+# https://doctransfer.io
+
+User-agent: *
+Allow: /
+Disallow: /dataroom
+Disallow: /view/
+Disallow: /api/
+Disallow: /sign-in
+Disallow: /sign-up
+
+# Sitemap location
+Sitemap: https://doctransfer.io/sitemap.xml
+
+# Crawl-delay for polite crawling
+Crawl-delay: 1
+
+# Google specific
+User-agent: Googlebot
+Allow: /
+Disallow: /dataroom
+Disallow: /view/
+Disallow: /api/
+
+# Bing specific  
+User-agent: Bingbot
+Allow: /
+Disallow: /dataroom
+Disallow: /view/
+Disallow: /api/
